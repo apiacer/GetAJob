@@ -6,15 +6,17 @@
     <title>Login</title>
 </head>
 <body>
-    <div>
-        <label>Username: </label>
-        <input placeholder="Enter your username" required>
-    </div>
-    <div>
-        <label>Password: </label>
-        <input placeholder="Enter your password" required>
-    </div>
+    <form method="POST" action="/login">
+        <div>
+            <label>Username: </label>
+            <input name="username" placeholder="Enter your username" required>
+        </div>
+        <div>
+            <label>Password: </label>
+            <input type="password" name="password" placeholder="Enter your password" required>
+        </div>
 
-    <button>Log In</button>
+        <button type="submit">Log In</button>
+    </form>
 </body>
 </html>
