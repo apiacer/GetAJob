@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Listings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/jobs.css') }}">
+  </head>
+  <body>
+    <header class="page-header">
+      <a href="/" class="home-link">← Back Home</a>
+      <h2>Job Listings</h2>
+      <a class="create-btn" href="/create-listing">Create Listing</a>
+    </header>
+    <section class="controls">
+      <form method="get" action="/jobs" class="search-form">
+        <input
+          type="text"
+          name="q"
+          placeholder="Search jobs..."
+          value="{{ request.args.get('q','') }}"
+        />
+        <button type="submit">Search</button>
+      </form>
+    </section>
+
+    <main class="jobs-list">
+      {% if jobs and jobs|length > 0 %}
+        {% for job in jobs %}
+          <a class="job-card" href="/job/{{ job.id }}">
+            <b class="job-title">{{ job.title }}</b>
+            <div class="job-desc">{{ job.description }}</div>
+          </a>
+        {% endfor %}
+      {% else %}
+        <div class="empty">No jobs found.</div>
+      {% endif %}
+    </main>
+  </body>
+</html>

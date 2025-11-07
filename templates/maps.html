@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Job Map</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/maps.css') }}">
+  <!-- Leaflet (no API key needed) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    /* Pass jobs from Flask into JS */
+    window.JOBS = {{ jobs | tojson }};
+  </script>
+  <script defer src="{{ url_for('static', filename='js/maps.js') }}"></script>
+</head>
+<body>
+  <header class="page-header">
+    <h2>Search / Map Jobs</h2>
+    <a class="home-link" href="/">Home</a>
+  </header>
+
+  <section class="filters">
+    <input type="text" id="q" placeholder="Search by keyword…" />
+    <div class="row">
+      <input type="text" id="loc" placeholder="Location" />
+      <input type="text" id="type" placeholder="Job Type" />
+      <button id="applyFilters">Search</button>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="list" id="results"></div>
+    <div id="map"></div>
+  </section>
+</body>
+</html>

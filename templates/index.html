@@ -1,15 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
-</head>
-<body>
-    <p>home</p>
-    <img src="{{ url_for('static', filename='images/hello_there.png') }}" >
-    <div>
-        <a href="/login" class="btn">Log In</a>
-    </div>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GetAJob</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  </head>
+
+  <body>
+    <header class="navbar">
+      <div class="logo-area">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="logo" class="logo" />
+        <h1 class="brand">GetAJob</h1>
+      </div>
+      <nav class="nav-links">
+        <a href="/signup">Sign Up</a>
+        <a href="/login">Login</a>
+        <a href="/jobs">Find Jobs</a>
+        <a href="/maps">Maps</a>
+      </nav>
+    </header>
+
+    <main class="home-content">
+      <h2>Welcome to GetAJob</h2>
+      <p>Find your next opportunity, connect with employers, and explore nearby workplaces.</p>
+      <a href="/jobs" class="cta-btn">Start Searching</a>
+    </main>
+  </body>
 </html>
