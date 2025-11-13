@@ -1,17 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
-from db import Database_api
 import os
-<<<<<<< HEAD
-# test data
-JOB_DATA = [
-    {"id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS."},
-    {"id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask."},
-    {"id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights."},
-    {"id": 4, "title": "UX Designer", "description": "Design flows and prototypes."},
-]
 import sys
 import sqlite3
+import datetime
+from flask import Flask, render_template, request, jsonify
 
+# keep repo root templates/static layout
+app = Flask(__name__, template_folder='../templates', static_folder='../static')
+app.secret_key = os.urandom(24)
+
+# ---------- SQLite helpers ----------
 DB_PATH = os.path.join(os.path.dirname(__file__), "jobs.db")
 
 
@@ -49,12 +46,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-
-def _get_tags(conn, job_id: int):
-    rows = conn.execute(
-        "SELECT tag FROM job_tags WHERE job_id=?",
-        (job_id,),
-    ).fetchall()
+def _get_tags(conn, job_id:int):
+    rows = conn.execute("SELECT tag FROM job_tags WHERE job_id=?", (job_id,)).fetchall()
     return [r["tag"] for r in rows]
 
 
@@ -78,33 +71,17 @@ def _job_row(conn, r):
 # initialize tables at import time
 init_db()
 
->>>>>>> 16e56e4 (feat(jobs): backend API + schema; post-job flow (endpoints, tags, edit/delete, success page))
-
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-db = Database_api()
-app = Flask(__name__, template_folder='../templates', static_folder='../static')
-app.secret_key = os.urandom(24)
-# demo data (swap for DB later)
-
-
+# ---------- HTML routes already in project ----------
 @app.route('/')
 def home():
     return render_template('index.html', title='Home')
-    
+
 @app.route('/login', methods=["GET", "POST"])
 def login_page():
     if request.method == "POST":
-        user_name = request.form.get('username')
-        password = request.form.get('password')
-        res = db.user.verify_password(user_name, password)
-        if res[0]:
-            # add to session
-            return redirect()
-
-        else:
-            pass
-
+        # demo prints
+        print(f"user name: {request.form.get('username')}")
+        print(f"password: {request.form.get('password')}")
     return render_template('login.html', title='login')
 
 @app.errorhandler(404)
@@ -122,6 +99,14 @@ def signup():
         print(f"email: {request.form.get('email')}")
         print(f"password: {request.form.get('password')}")
     return render_template('signup.html', title='Sign Up')
+
+# demo data for legacy /jobs template
+JOB_DATA = [
+    {"id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS."},
+    {"id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask."},
+    {"id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights."},
+    {"id": 4, "title": "UX Designer", "description": "Design flows and prototypes."},
+]
 
 @app.route('/jobs')
 def jobs():
@@ -141,6 +126,10 @@ def job_detail(job_id):
     # Minimal detail page for now:
     return f"<h1>{job['title']}</h1><p>{job['description']}</p>"
 
+@app.route('/create-listing', methods=["GET", "POST"])
+def create_listing():
+    return "<h1>Create Listing (coming soon)</h1>"
+
 @app.route('/maps')
 def maps():
     # demo data — replace with DB rows (id, title, description, lat, lng, location, type)
@@ -154,54 +143,7 @@ def maps():
     ]
     return render_template('maps.html', jobs=jobs, title='Maps')
 
-@app.route('/dashboard')
-def signedin():
-    # Later, you could check if a user is logged in here
-    # Example: if not session.get("user_id"): return redirect("/login")
-    return render_template('signedin.html', title='Dashboard')
-
-@app.route('/create-listing', methods=["GET", "POST"])
-def create_listing():
-    if request.method == "POST":
-        title = request.form.get("title")
-        description = request.form.get("description")
-        print(f"New Job Listing → Title: {title}, Description: {description}")
-        # later: save to database
-        flash("Job listing created successfully!", "success")
-        return redirect("/jobs")
-    return render_template("create_listing.html", title="Create Listing")
-
-@app.route('/notifications')
-def notifications():
-    notifications = [
-        "You have a new message about your application to Job #2.",
-        "Your job listing #11 was approved."
-    ]
-    return render_template('notifications.html', notifications=notifications, title='Notifications')
-
-@app.route('/messaging', methods=["GET", "POST"])
-def messaging():
-    # Fake in-memory message list (replace with DB later)
-    messages = [
-        {"sender": "Employer", "text": "Hi, are you available for an interview?"}
-    ]
-
-    if request.method == "POST":
-        new_msg = request.form.get("message")
-        if new_msg:
-            messages.append({"sender": "You", "text": new_msg})
-            flash("Message sent!", "success")
-            # In a real app, you'd save it to a database here
-
-    return render_template("messaging.html", messages=messages, title="Messages")
-
-@app.route('/admin')
-def admin():
-    # Later, you could restrict access:
-    # if not session.get("is_admin"): return redirect("/")
-    return render_template('admin.html', title='Admin Panel')
-
-
+# ---------- JSON API for SPA ----------
 @app.route("/api/jobs", methods=["GET"])
 def api_list_jobs():
     q = request.args.get("q", "").strip()
@@ -210,8 +152,8 @@ def api_list_jobs():
         like = f"%{q}%"
         rows = conn.execute(
             """SELECT * FROM jobs
-               WHERE title LIKE ? OR description LIKE ? OR location LIKE ?
-               ORDER BY created_at DESC""",
+            WHERE title LIKE ? OR description LIKE ? OR location LIKE ?
+            ORDER BY created_at DESC""",
             (like, like, like),
         ).fetchall()
     else:
@@ -255,7 +197,7 @@ def api_create_job():
     cur.execute(
         """INSERT INTO jobs(title, description, location,
                             availability_morning, availability_afternoon, availability_evening)
-           VALUES (?, ?, ?, ?, ?, ?)""",
+        VALUES (?, ?, ?, ?, ?, ?)""",
         (title, description, location, am, pm, eve),
     )
     job_id = cur.lastrowid
@@ -273,8 +215,7 @@ def api_create_job():
 @app.route("/api/jobs/<int:job_id>", methods=["PUT"])
 def api_update_job(job_id):
     data = request.get_json(force=True) or {}
-    fields = []
-    vals = []
+    fields, vals = [], []
 
     def set_field(col, val):
         fields.append(f"{col}=?")
