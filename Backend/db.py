@@ -95,7 +95,7 @@ class Base:
             return False, error_msg
 
     def _select_data(self, condition_clause:str="1=1", condition_val:list=None, 
-                     column:list[str]=["*"], order_by:str=None, limit:int=None, desc:bool=False, offset:int=None)->tuple[bool, list[dict]|str]:
+                    column:list[str]=["*"], order_by:str=None, limit:int=None, desc:bool=False, offset:int=None)->tuple[bool, list[dict]|str]:
         try:
             if condition_val is None:
                 condition_val = []
@@ -171,7 +171,7 @@ class Base:
             # add logger later
             self._conn.rollback()
             return False, error_msg
- 
+
 class User(Base):
     def __init__(self, cur, conn, debug):
         field = {
