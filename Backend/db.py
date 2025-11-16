@@ -488,8 +488,37 @@ class Post(Base):
         return self._execute_sql(sql, [user_id])
 
     def search_posts(self, limit:int=10, offset:int=0, tags:list=None, key_words:list=None):
-        pass
+        sql = """
+            SELECT p.*
+            FROM posts p
+            JOIN post_tag pt ON p.post_id = pt.post_id
+            JOIN tags t ON pt.tag_id = t.tag_id
+            WHERE 
+        """
 
+        conditions = []
+        params = []
+
+        # keyword conditions (must match ALL)
+        for kw in key_words:
+            conditions.append("(p.title LIKE ? OR p.content LIKE ?)")
+            like = f"%{kw}%"
+            params.extend([like, like])
+
+        # tag filter (ALL tags)
+        if tags:
+            tag_placeholders = ",".join("?" for _ in tags)
+            conditions.append(f"t.tag_name IN ({tag_placeholders})")
+            params.extend(tags)
+
+        sql += " AND ".join(conditions)
+        sql += " GROUP BY p.post_id HAVING COUNT(DISTINCT t.tag_name) = ?"
+        params.append(len(tags))
+
+        sql += " ORDER BY p.create_time DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        return self._execute_sql(sql, params)
 
 class Db_api:
     def __init__(self, db_path:str=None, debug:bool=True):
