@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
-from db import Database_api, DB_PATH
+from db import Db_api, DB_PATH
 import os
 import math
 
@@ -20,7 +20,7 @@ USER_DATA = [
 
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-db = Database_api()
+db = Db_api()
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
 # demo data (swap for DB later)
@@ -77,23 +77,50 @@ def signup():
 
 @app.route('/jobs')
 def jobs():
-    q = request.args.get('q', '').strip().lower()
-    page_num = int(request.args.get('page', 1)) # Get current page from URL
-    items_per_page = 3
-    start_index = (page_num - 1) * items_per_page
+    # --- Query parameters ---
+    q = request.args.get('q', '').strip()
+    raw_tags = request.args.get('tags', '').strip()
+    page_num = int(request.args.get('page', 1))
 
-    # test with database
-    paginated_data = db.post.select_latest_n_posts(items_per_page+1, start_index)[1]
-    hide_prev = page_num == 1
-    hide_next = len(paginated_data)<=items_per_page
-    paginated_data = paginated_data[:-1]
+    # Parse multi-tag input: "crypto,binance,ai"
+    tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else None
 
-    # hide_next = page_num == math.ceil( len(JOB_DATA) / items_per_page )
-    if q:
-        jobs = [j for j in JOB_DATA
-                if q in j["title"].lower() or q in j["description"].lower()]
+    # Parse keywords: split user query into multiple words
+    keywords = [w for w in q.split() if w] if q else None
 
-    return render_template('jobs.html', jobs=paginated_data, title='Jobs', page_num=page_num, hide_prev=hide_prev, hide_next=hide_next)
+    # Pagination settings
+    ITEMS_PER_PAGE = 10
+    offset = (page_num - 1) * ITEMS_PER_PAGE
+
+    # --- Query database ---
+    ok, res = db.post.search_posts(
+        limit=ITEMS_PER_PAGE + 1,  # fetch 1 extra to detect "next page"
+        offset=offset,
+        tags=tags,
+        key_words=keywords
+    )
+
+    if not ok:
+        return f"Database error: {res}", 500
+
+    # --- Pagination controls ---
+    hide_prev = (page_num == 1)
+    hide_next = len(res) <= ITEMS_PER_PAGE
+
+    # Remove the extra record
+    posts = res[:ITEMS_PER_PAGE]
+
+    return render_template(
+        'jobs.html',
+        jobs=posts,
+        title='Jobs',
+        page_num=page_num,
+        hide_prev=hide_prev,
+        hide_next=hide_next,
+        q=q,
+        tags=raw_tags
+    )
+
 
 @app.route('/job/<int:job_id>')
 def job_detail(job_id):
