@@ -403,18 +403,19 @@ class Post(Base):
         self.name="post"
         self._create_table()
         self._trigger_update_modify_time()
-        
+
     def _create_table(self):
         sql = f"""
-            CREATE TABLE IF NOT EXIST {self.name}
-            post_id INTERGER PRIMARY KEY,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            owner_id INTERGER NOT NULL REFERENCES user(user_id) ON DELETE CASCADE,
-            location TEXT,
-            budget TEXT,
-            create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            modify_time DATETIME DEFAULT CURRENT_TIMESTAMP
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                post_id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                owner_id INTEGER NOT NULL REFERENCES user(user_id) ON DELETE CASCADE,
+                location TEXT,
+                budget TEXT,
+                create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                modify_time DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         """
 
         return self._execute_sql(sql)
@@ -495,9 +496,9 @@ class Post(Base):
         key_words = key_words or []   # ensure list
         tags = tags or []             # ensure list
 
-        sql = """
+        sql = f"""
             SELECT p.*
-            FROM posts p
+            FROM {self.name} p
         """
 
         # Only join tag tables if tags are provided
@@ -514,7 +515,7 @@ class Post(Base):
 
         # Keyword conditions (match ALL)
         for kw in key_words:
-            conditions.append("(p.title LIKE ? OR p.content LIKE ?)")
+            conditions.append("(p.title LIKE ? OR p.description LIKE ?)")
             like = f"%{kw}%"
             params.extend([like, like])
 
@@ -534,7 +535,7 @@ class Post(Base):
             sql += " GROUP BY p.post_id HAVING COUNT(DISTINCT t.tag_name) = ?"
             params.append(len(tags))
 
-        sql += " ORDER BY p.create_time DESC LIMIT ? OFFSET ?"
+        sql += " ORDER BY p.modify_time DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         return self._execute_sql(sql, params)
