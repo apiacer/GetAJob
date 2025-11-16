@@ -401,6 +401,8 @@ class Post(Base):
     def __init__(self, db_path, debug = False):
         super().__init__(db_path, debug)
         self.name="post"
+        self._create_table()
+        self._trigger_update_modify_time()
         
     def _create_table(self):
         sql = f"""
@@ -545,6 +547,6 @@ class Db_api:
 
         self.user = User(db_path, debug)
         self.post = Post(db_path, debug)
-        
+
 if __name__ == "__main__":
     Db_api(DB_PATH, DEBUG)
