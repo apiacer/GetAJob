@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{{ title }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+
+<body>
+  <h1>Edit Job</h1>
+  <form method="post" action="{{ url_for('job_update', post_id=post.post_id) }}">
+    <label>Title <input name="title" value="{{ post.title }}" required></label><br>
+    <label>Description <textarea name="description" required>{{ post.description }}</textarea></label><br>
+    <label>Location <input name="location" value="{{ post.location or '' }}" required></label><br>
+    <label>Tags (comma-separated) <input name="tags" value="{{ tags or '' }}"></label><br>
+    <fieldset>
+      <legend>Availability</legend>
+      <label><input type="checkbox" name="availability_morning" {% if post.availability_morning %}checked{% endif %}> Morning</label>
+      <label><input type="checkbox" name="availability_afternoon" {% if post.availability_afternoon %}checked{% endif %}> Afternoon</label>
+      <label><input type="checkbox" name="availability_evening" {% if post.availability_evening %}checked{% endif %}> Evening</label>
+    </fieldset>
+    <button type="submit">Save</button>
+    <a href="{{ url_for('job_view', post_id=post.post_id) }}">Cancel</a>
+  </form>
+</body>
+</html>
