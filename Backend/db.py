@@ -403,6 +403,7 @@ class Post(Base):
         self.name="post"
         self._create_table()
         self._trigger_update_modify_time()
+        self._ensure_tag_tables()
 
     def _create_table(self):
         sql = f"""
@@ -434,6 +435,57 @@ class Post(Base):
         """
 
         return self._execute_sql(sql)
+    
+    def _ensure_tag_tables(self):
+        sql1 = """
+            CREATE TABLE IF NOT EXISTS tags (
+                tag_id INTEGER PRIMARY KEY,
+                tag_name TEXT UNIQUE NOT NULL
+            );
+        """
+        self._execute_sql(sql1)
+        sql2 = """
+            CREATE TABLE IF NOT EXISTS post_tag (
+                post_id INTEGER NOT NULL REFERENCES post(post_id) ON DELETE CASCADE,
+                tag_id INTEGER NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
+                PRIMARY KEY (post_id, tag_id)
+            );
+        """
+        self._execute_sql(sql2)
+    
+    def set_post_tags(self, post_id:int, tags:list)->tuple[bool, str]:
+        # normalize input list
+        tags = [t.strip() for t in (tags or []) if t and t.strip()]
+        # clear existing links
+        self._execute_sql("DELETE FROM post_tag WHERE post_id = ?", [post_id])
+        if not tags:
+            return True, "ok"
+        for t in tags:
+            self._execute_sql("INSERT OR IGNORE INTO tags(tag_name) VALUES (?)", [t])
+            ok, rows = self._execute_sql("SELECT tag_id FROM tags WHERE tag_name = ?", [t])
+            if ok and rows:
+                tag_id = rows[0]["tag_id"]
+                self._execute_sql(
+                    "INSERT OR IGNORE INTO post_tag(post_id, tag_id) VALUES (?, ?)",
+                    [post_id, tag_id]
+                )
+        return True, "ok"
+    
+    def get_post_tags(self, post_id:int)->tuple[bool, list]:
+        sql = """
+            SELECT t.tag_name
+            FROM post_tag pt JOIN tags t ON pt.tag_id = t.tag_id
+            WHERE pt.post_id = ?
+            ORDER BY t.tag_name
+        """
+        ok, rows = self._execute_sql(sql, [post_id])
+        if not ok:
+            return ok, []
+        return True, [r["tag_name"] for r in rows]
+    
+    def get_last_post_id(self)->tuple[bool, list]:
+        # minimal helper to fetch last inserted id without modifying _sql_insert
+        return self._execute_sql("SELECT MAX(post_id) AS id FROM post")
     
     def create_post(self, title:str, description:str, owner_id:int, location:str=None, budget:str=None):
         return self._sql_insert({"title":title, "description":description, "owner_id":owner_id, "location":location, "budget":budget})
