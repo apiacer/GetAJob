@@ -37,7 +37,7 @@ def add_data():
         print(res)
 
 
-add_data()
+##add_data() #disable after first run to avoid duplicates
 
 
 @app.route('/')
@@ -76,7 +76,7 @@ def signup():
     return render_template('signup.html', title='Sign Up')
 
 @app.route('/jobs')
-def jobs():
+def jobs_list(): ##### CHANGED jobs to match new template structure
     # --- Query parameters ---
     q = request.args.get('q', '').strip()
     raw_tags = request.args.get('tags', '').strip()
@@ -111,7 +111,7 @@ def jobs():
     posts = res[:ITEMS_PER_PAGE]
 
     return render_template(
-        'jobs.html',
+        'jobs/job_list.html', ### Changed template path
         jobs=posts,
         title='Jobs',
         page_num=page_num,
@@ -121,7 +121,8 @@ def jobs():
         tags=raw_tags
     )
 
-
+######## Job detail page (minimal) ############ CHANGED FROM HERE
+'''
 @app.route('/job/<int:job_id>')
 def job_detail(job_id):
     job = next((j for j in JOB_DATA if j["id"] == job_id), None)
@@ -129,17 +130,145 @@ def job_detail(job_id):
         return render_template('404.html'), 404
     # Minimal detail page for now:
     return f"<h1>{job['title']}</h1><p>{job['description']}</p>"
+'''
+##### Full job detail page ############ CHANGES FROM HERE
+# ##### TO HERE ##########
 
+@app.route('/jobs/<int:post_id>')
+def job_view(post_id):
+    ok, rows = db.post.select_post(post_id)
+    if not ok or not rows:
+        return render_template('404.html'), 404
+    post = rows[0]
+
+    # fetch tags and derive availability flags
+    ok_t, tag_list = db.post.get_post_tags(post_id)
+    tag_list = tag_list if ok_t else []
+    post["tags"] = [t for t in tag_list if not t.startswith("avail:")]
+
+    post["availability_morning"] = 1 if "avail:morning" in tag_list else 0
+    post["availability_afternoon"] = 1 if "avail:afternoon" in tag_list else 0
+    post["availability_evening"] = 1 if "avail:evening" in tag_list else 0
+
+    return render_template('jobs/job_view.html', post=post, title=post["title"])
+###### TO HERE ##########
+
+### #### Job create / edit / delete #####
+@app.route('/jobs/new', methods=['GET'])
+def job_new():
+    return render_template('jobs/job_new.html', title='New Job')
+
+@app.route('/jobs', methods=['POST'])
+def job_create():
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip()
+    location = request.form.get("location", "").strip()
+    raw_tags = request.form.get("tags", "").strip()
+
+    # required fields (keep simple)
+    if not title or not description or not location:
+        flash("Title, description, and location are required.", "error")
+        return redirect(url_for('job_new'))
+
+    # owner: no auth yet, assume 1
+    owner_id = 1
+
+    # create post (no change to teammate DB API)
+    ok, res = db.post.create_post(title, description, owner_id, location)
+    if not ok:
+        flash(f"DB error creating post: {res}", "error")
+        return redirect(url_for('job_new'))
+
+    # find new id (minimal and safe for single-user local dev)
+    ok_id, row = db.post.get_last_post_id()
+    post_id = row[0]["id"] if ok_id and row and row[0]["id"] is not None else None
+    if not post_id:
+        flash("Could not determine new post id.", "error")
+        return redirect(url_for('jobs_list'))
+
+    # tags: parse + availability as tags
+    tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else []
+    if request.form.get("availability_morning"):
+        tags.append("avail:morning")
+    if request.form.get("availability_afternoon"):
+        tags.append("avail:afternoon")
+    if request.form.get("availability_evening"):
+        tags.append("avail:evening")
+
+    db.post.set_post_tags(post_id, tags)
+
+    return redirect(url_for('upload_success', id=post_id))
+
+@app.route('/jobs/<int:post_id>/edit', methods=['GET'])
+def job_edit(post_id):
+    ok, rows = db.post.select_post(post_id)
+    if not ok or not rows:
+        return render_template('404.html'), 404
+    post = rows[0]
+
+    ok_t, tag_list = db.post.get_post_tags(post_id)
+    tag_list = tag_list if ok_t else []
+    user_tags = [t for t in tag_list if not t.startswith("avail:")]
+    tags_str = ", ".join(user_tags)
+
+    post["availability_morning"] = 1 if "avail:morning" in tag_list else 0
+    post["availability_afternoon"] = 1 if "avail:afternoon" in tag_list else 0
+    post["availability_evening"] = 1 if "avail:evening" in tag_list else 0
+
+    return render_template('jobs/job_edit.html', post=post, tags=tags_str, title=f"Edit: {post['title']}")
+
+@app.route('/jobs/<int:post_id>/edit', methods=['POST'])
+def job_update(post_id):
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip()
+    location = request.form.get("location", "").strip()
+    raw_tags = request.form.get("tags", "").strip()
+
+    # update core fields; NOTE teammate typo: locaiton
+    db.post.update_post(
+        post_id,
+        title=title if title else None,
+        description=description if description else None,
+        locaiton=location if location else None  # <- yes, spelled 'locaiton' in teammate code
+    )
+
+    # rebuild tags
+    tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else []
+    if request.form.get("availability_morning"):
+        tags.append("avail:morning")
+    if request.form.get("availability_afternoon"):
+        tags.append("avail:afternoon")
+    if request.form.get("availability_evening"):
+        tags.append("avail:evening")
+    db.post.set_post_tags(post_id, tags)
+
+    return redirect(url_for('job_view', post_id=post_id))
+
+@app.route('/jobs/<int:post_id>/delete', methods=['POST'])
+def job_delete(post_id):
+    db.post.delete_post(post_id)
+    # post_tag rows will cascade delete
+    flash("Listing deleted.", "success")
+    return redirect(url_for('jobs_list'))
+
+@app.route('/jobs/success')
+def upload_success():
+    post_id = request.args.get("id")
+    return render_template('jobs/upload_success.html', post_id=post_id, title="Success")
+
+
+
+##### Maps page with job locations #####
 @app.route('/maps')
 def maps():
     # demo data — replace with DB rows (id, title, description, lat, lng, location, type)
     jobs = [
         {"id": 101, "title": "Barista", "description": "Morning shift near Midtown.",
-         "lat": 38.571, "lng": -121.486, "location":"Midtown, Sacramento", "type":"Part-time"},
+        "lat": 38.571, "lng": -121.486, "location":"Midtown, Sacramento", "type":"Part-time"},
         {"id": 102, "title": "Front Desk", "description": "Evening shift, downtown.",
-         "lat": 38.581, "lng": -121.494, "location":"Downtown", "type":"Full-time"},
+        "lat": 38.581, "lng": -121.494, "location":"Downtown", "type":"Full-time"},
         {"id": 103, "title": "Prep Cook", "description": "Kitchen support role.",
-         "lat": 38.563, "lng": -121.442, "location":"East Sac", "type":"Part-time"},
+        "lat": 38.563, "lng": -121.442, "location":"East Sac", "type":"Part-time"},
     ]
     return render_template('maps.html', jobs=jobs, title='Maps')
 
