@@ -9,7 +9,7 @@ body {
 }
 
 .page-header {
-  max-width: 960px;
+  max-width: 1920px;
   margin: 50px auto 10px;
   padding: 0 24px;
   display: flex;
@@ -22,6 +22,12 @@ body {
   font-weight: 700;
   font-size: 1.65rem;
   margin: 0;
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  padding: 18px 17px;
 }
 
 .create-btn {
@@ -37,6 +43,32 @@ body {
   max-width: 960px;
   margin: 10px auto 0;
   padding: 0 24px;
+}
+
+.side-features {
+  max-width: 960px;
+  position: fixed;
+  z-index: 1;
+  padding: 18px 17px;
+  background-color: #fff;
+  overflow-x: hidden;
+}
+
+.filter-area {
+  max-width: 960px;
+  margin: 30px auto 40px;
+  padding: 18px 17px;
+  border-radius: 8px;
+  box-shadow: 0 1px 8px #eee;
+  margin-bottom: 19px;
+  text-decoration: none;
+  color: #214;
+}
+
+.search-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
 }
 
 .search-form {
@@ -71,7 +103,9 @@ body {
 }
 
 .job-card {
-  display: block;
+  display: grid;
+  grid-template-columns: 1fr 3fr 3fr;
+  grid-gap: 2%;
   background: #fff;
   padding: 18px 17px;
   border-radius: 8px;
@@ -79,6 +113,30 @@ body {
   margin-bottom: 19px;
   text-decoration: none;
   color: #214;
+}
+
+.job-options {
+  display: grid;
+  grid-template-rows: 2fr 1fr 1fr;
+  border: 1px solid #214;
+}
+
+.job-details {
+  display: grid;
+  grid-template-rows: 1fr 1fr 1fr;
+  background: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #214;
+}
+
+.pages {
+  display: grid;
+  grid-template-columns: 1fr 4fr 1fr;
+}
+
+.hidden-but-takes-space {
+  visibility: hidden;
 }
 
 .job-title { color: var(--brand); }

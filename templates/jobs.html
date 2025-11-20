@@ -13,29 +13,76 @@
       <h2>Job Listings</h2>
       <a class="create-btn" href="/create-listing">Create Listing</a>
     </header>
-    <section class="controls">
-      <form method="get" action="/jobs" class="search-form">
-        <input
-          type="text"
-          name="q"
-          placeholder="Search jobs..."
-          value="{{ request.args.get('q','') }}"
-        />
-        <button type="submit">Search</button>
-      </form>
-    </section>
+    <div class="page-grid">
+      <section class = sidebar>
+        <div class="side-features">
+          <div class="filter-area">
+            <p>address</p>
+            <p>time</p>
+            <div class="search-settings">
+              <p>min distance</p>
+              <p>max distance</p>
+              <p>min price</p>
+              <p>max price</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div>
+        <section class="controls">
+          <form method="get" action="/jobs" class="search-form">
+            <input
+              type="text"
+              name="q"
+              placeholder="Search jobs..."
+              value="{{ request.args.get('q','') }}"
+            />
+            <button type="submit">Search</button>
+          </form>
+        </section>
 
-    <main class="jobs-list">
-      {% if jobs and jobs|length > 0 %}
-        {% for job in jobs %}
-          <a class="job-card" href="/job/{{ job.id }}">
-            <b class="job-title">{{ job.title }}</b>
-            <div class="job-desc">{{ job.description }}</div>
-          </a>
-        {% endfor %}
-      {% else %}
-        <div class="empty">No jobs found.</div>
-      {% endif %}
-    </main>
+        <main class="jobs-list">
+          {% if jobs and jobs|length > 0 %}
+            {% for job in jobs %}
+              <a class="job-card" href="/job/{{ job.id }}">
+                <div>
+                  <div class="job-options">
+                    <p>apply</p>
+                    <p>view</p>
+                    <p>report</p>
+                  </div>
+                </div>
+                <div>
+                  <b class="job-title">{{ job.title}}</b>
+                  <div class="job-desc">{{ job.description }}</div>
+                  <p>tags</p>
+                  <div class="job-owner">{{ job.owner_id }}</div>
+                </div>
+                <div class="job-details">{{ job.details }}
+                  <p>distance</p>
+                  <p>price range</p>
+                  <p>time of day</p>
+                </div>
+              </a>
+            {% endfor %}
+          {% else %}
+            <div class="empty">No jobs found.</div>
+          {% endif %}
+          <div class="pages">
+            <form {% if hide_prev %} class="hidden-but-takes-space" {% endif %} method="get" action="/jobs" class="page-button">
+              <input type="hidden" id="page" name="page" value="{{ page_num - 1 }}">
+              <button type="submit">Previous Page</button>
+            </form>
+            
+            <p>pagestuffs {{ page_num }}</p>
+
+            <form {% if hide_next %} class="hidden-but-takes-space" {% endif %} method="get" action="/jobs" class="page-button">
+              <input type="hidden" id="page" name="page" value="{{ page_num + 1 }}">
+              <button type="submit">Next Page</button>
+            </form>
+          </div>
+        </main>
+      </div>
+    </div>
   </body>
 </html>

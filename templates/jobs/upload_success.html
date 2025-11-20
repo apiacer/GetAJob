@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Success</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <h1>Job posted!</h1>
+  {% if post_id %}
+    <p>Your listing has been created.</p>
+    <p><a href="{{ url_for('job_view', post_id=post_id) }}">View it</a> or <a href="{{ url_for('jobs_list') }}">go back to jobs</a>.</p>
+  {% else %}
+    <p><a href="{{ url_for('jobs_list') }}">Back to jobs</a></p>
+  {% endif %}
+</body>
+</html>

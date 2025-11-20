@@ -1,23 +1,46 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
-from db import Database_api
+from db import Db_api, DB_PATH
 import os
 import re
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
+import math
 
 # test data
 JOB_DATA = [
-    {"id": 1, "title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS."},
-    {"id": 2, "title": "Backend Developer", "description": "APIs with Python + Flask."},
-    {"id": 3, "title": "Data Analyst", "description": "SQL, charts, and insights."},
-    {"id": 4, "title": "UX Designer", "description": "Design flows and prototypes."},
+    {"title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS.", "owner_id": "2", "location": "1300 65th St"},
+    {"title": "Backend Developer", "description": "APIs with Python + Flask.", "owner_id": "2", "location": "1300 65th St"},
+    {"title": "Data Analyst", "description": "SQL, charts, and insights.", "owner_id": "3", "location": "1305 64th St"},
+    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
+    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
+]
+
+USER_DATA = [
+    {"user_name": "chen", "email":"chenwang@csus.edu", "password":"asdfasdf"},
+    {"user_name": "miles", "email":"mboyle@csus.edu", "password":"asdfasdf"},
+    {"user_name":"jared", "email":"jaredshicks@csus.edu", "password":"asdfasdf"}
 ]
 
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-db = Database_api()
+
+db = Db_api()
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
 # demo data (swap for DB later)
+
+
+# add to database
+def add_data():
+    for user in USER_DATA:
+        res = db.user.create_account(user["user_name"], user["password"], user["email"])
+        print(res)
+
+    for job in JOB_DATA:
+        res = db.post.create_post(job["title"], job["description"], job["owner_id"], job["location"])
+        print(res)
+
+
+##add_data() #disable after first run to avoid duplicates
 
 
 @app.route('/')
@@ -89,15 +112,53 @@ def check_username():
 
 
 @app.route('/jobs')
-def jobs():
-    q = request.args.get('q', '').strip().lower()
-    jobs = JOB_DATA
-    if q:
-        jobs = [j for j in JOB_DATA
-                if q in j["title"].lower() or q in j["description"].lower()]
+def jobs_list(): ##### CHANGED jobs to match new template structure
+    # --- Query parameters ---
+    q = request.args.get('q', '').strip()
+    raw_tags = request.args.get('tags', '').strip()
+    page_num = int(request.args.get('page', 1))
 
-    return render_template('jobs.html', jobs=jobs, title='Jobs')
+    # Parse multi-tag input: "crypto,binance,ai"
+    tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else None
 
+    # Parse keywords: split user query into multiple words
+    keywords = [w for w in q.split() if w] if q else None
+
+    # Pagination settings
+    ITEMS_PER_PAGE = 10
+    offset = (page_num - 1) * ITEMS_PER_PAGE
+
+    # --- Query database ---
+    ok, res = db.post.search_posts(
+        limit=ITEMS_PER_PAGE + 1,  # fetch 1 extra to detect "next page"
+        offset=offset,
+        tags=tags,
+        key_words=keywords
+    )
+
+    if not ok:
+        return f"Database error: {res}", 500
+
+    # --- Pagination controls ---
+    hide_prev = (page_num == 1)
+    hide_next = len(res) <= ITEMS_PER_PAGE
+
+    # Remove the extra record
+    posts = res[:ITEMS_PER_PAGE]
+
+    return render_template(
+        'jobs/job_list.html', ### Changed template path
+        jobs=posts,
+        title='Jobs',
+        page_num=page_num,
+        hide_prev=hide_prev,
+        hide_next=hide_next,
+        q=q,
+        tags=raw_tags
+    )
+
+######## Job detail page (minimal) ############ CHANGED FROM HERE
+'''
 @app.route('/job/<int:job_id>')
 def job_detail(job_id):
     job = next((j for j in JOB_DATA if j["id"] == job_id), None)
@@ -105,20 +166,212 @@ def job_detail(job_id):
         return render_template('404.html'), 404
     # Minimal detail page for now:
     return f"<h1>{job['title']}</h1><p>{job['description']}</p>"
+'''
+##### Full job detail page ############ CHANGES FROM HERE
+# ##### TO HERE ##########
 
+@app.route('/jobs/<int:post_id>')
+def job_view(post_id):
+    ok, rows = db.post.select_post(post_id)
+    if not ok or not rows:
+        return render_template('404.html'), 404
+    post = rows[0]
+
+    # fetch tags and derive availability flags
+    ok_t, tag_list = db.post.get_post_tags(post_id)
+    tag_list = tag_list if ok_t else []
+    post["tags"] = [t for t in tag_list if not t.startswith("avail:")]
+
+    post["availability_morning"] = 1 if "avail:morning" in tag_list else 0
+    post["availability_afternoon"] = 1 if "avail:afternoon" in tag_list else 0
+    post["availability_evening"] = 1 if "avail:evening" in tag_list else 0
+
+    return render_template('jobs/job_view.html', post=post, title=post["title"])
+###### TO HERE ##########
+
+### #### Job create / edit / delete #####
+@app.route('/jobs/new', methods=['GET'])
+def job_new():
+    return render_template('jobs/job_new.html', title='New Job')
+
+@app.route('/jobs', methods=['POST'])
+def job_create():
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip()
+    location = request.form.get("location", "").strip()
+    raw_tags = request.form.get("tags", "").strip()
+
+    # required fields (keep simple)
+    if not title or not description or not location:
+        flash("Title, description, and location are required.", "error")
+        return redirect(url_for('job_new'))
+
+    # owner: no auth yet, assume 1
+    owner_id = 1
+
+    # create post (no change to teammate DB API)
+    ok, res = db.post.create_post(title, description, owner_id, location)
+    if not ok:
+        flash(f"DB error creating post: {res}", "error")
+        return redirect(url_for('job_new'))
+
+    # find new id (minimal and safe for single-user local dev)
+    ok_id, row = db.post.get_last_post_id()
+    post_id = row[0]["id"] if ok_id and row and row[0]["id"] is not None else None
+    if not post_id:
+        flash("Could not determine new post id.", "error")
+        return redirect(url_for('jobs_list'))
+
+    # tags: parse + availability as tags
+    tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else []
+    if request.form.get("availability_morning"):
+        tags.append("avail:morning")
+    if request.form.get("availability_afternoon"):
+        tags.append("avail:afternoon")
+    if request.form.get("availability_evening"):
+        tags.append("avail:evening")
+
+    db.post.set_post_tags(post_id, tags)
+
+    return redirect(url_for('upload_success', id=post_id))
+
+@app.route('/jobs/<int:post_id>/edit', methods=['GET'])
+def job_edit(post_id):
+    ok, rows = db.post.select_post(post_id)
+    if not ok or not rows:
+        return render_template('404.html'), 404
+    post = rows[0]
+
+    ok_t, tag_list = db.post.get_post_tags(post_id)
+    tag_list = tag_list if ok_t else []
+    user_tags = [t for t in tag_list if not t.startswith("avail:")]
+    tags_str = ", ".join(user_tags)
+
+    post["availability_morning"] = 1 if "avail:morning" in tag_list else 0
+    post["availability_afternoon"] = 1 if "avail:afternoon" in tag_list else 0
+    post["availability_evening"] = 1 if "avail:evening" in tag_list else 0
+
+    return render_template('jobs/job_edit.html', post=post, tags=tags_str, title=f"Edit: {post['title']}")
+
+@app.route('/jobs/<int:post_id>/edit', methods=['POST'])
+def job_update(post_id):
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip()
+    location = request.form.get("location", "").strip()
+    raw_tags = request.form.get("tags", "").strip()
+
+    # update core fields; NOTE teammate typo: locaiton
+    db.post.update_post(
+        post_id,
+        title=title if title else None,
+        description=description if description else None,
+        locaiton=location if location else None  # <- yes, spelled 'locaiton' in teammate code
+    )
+
+    # rebuild tags
+    tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else []
+    if request.form.get("availability_morning"):
+        tags.append("avail:morning")
+    if request.form.get("availability_afternoon"):
+        tags.append("avail:afternoon")
+    if request.form.get("availability_evening"):
+        tags.append("avail:evening")
+    db.post.set_post_tags(post_id, tags)
+
+    return redirect(url_for('job_view', post_id=post_id))
+
+@app.route('/jobs/<int:post_id>/delete', methods=['POST'])
+def job_delete(post_id):
+    db.post.delete_post(post_id)
+    # post_tag rows will cascade delete
+    flash("Listing deleted.", "success")
+    return redirect(url_for('jobs_list'))
+
+@app.route('/jobs/success')
+def upload_success():
+    post_id = request.args.get("id")
+    return render_template('jobs/upload_success.html', post_id=post_id, title="Success")
+
+
+
+##### Maps page with job locations #####
 @app.route('/maps')
 def maps():
     # demo data — replace with DB rows (id, title, description, lat, lng, location, type)
     jobs = [
         {"id": 101, "title": "Barista", "description": "Morning shift near Midtown.",
-         "lat": 38.571, "lng": -121.486, "location":"Midtown, Sacramento", "type":"Part-time"},
+        "lat": 38.571, "lng": -121.486, "location":"Midtown, Sacramento", "type":"Part-time"},
         {"id": 102, "title": "Front Desk", "description": "Evening shift, downtown.",
-         "lat": 38.581, "lng": -121.494, "location":"Downtown", "type":"Full-time"},
+        "lat": 38.581, "lng": -121.494, "location":"Downtown", "type":"Full-time"},
         {"id": 103, "title": "Prep Cook", "description": "Kitchen support role.",
-         "lat": 38.563, "lng": -121.442, "location":"East Sac", "type":"Part-time"},
+        "lat": 38.563, "lng": -121.442, "location":"East Sac", "type":"Part-time"},
     ]
     return render_template('maps.html', jobs=jobs, title='Maps')
+    
+@app.route('/api/jobs/locations')
+def api_job_locations():
+    """
+    Returns job locations as a GeoJSON FeatureCollection.
+    This endpoint:
+    - Attempts to read posts via db.post.select_latest_n_posts(...)
+    - Converts any rows that include numeric latitude/longitude into GeoJSON features
+    - Falls back to demo data if no geo-enabled rows are found
+    """
+    features = []
+    try:
+        res = db.post.select_latest_n_posts(1000, 0)
+        rows = res[1] if isinstance(res, (list, tuple)) and len(res) > 1 else res
+        for r in rows:
+            # Support dict rows (recommended). If your DB returns tuples, adapt here.
+            if isinstance(r, dict):
+                lat = r.get('lat') or r.get('latitude') or r.get('latitude_float')
+                lng = r.get('lng') or r.get('longitude') or r.get('longitude_float')
+                try:
+                    lat = float(lat) if lat is not None else None
+                    lng = float(lng) if lng is not None else None
+                except Exception:
+                    lat = None
+                    lng = None
+                if lat is None or lng is None:
+                    continue
+                props = {
+                    'id': r.get('id'),
+                    'title': r.get('title'),
+                    'description': r.get('description'),
+                    'location': r.get('location'),
+                    'url': r.get('url')
+                }
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
+                    'properties': props
+                })
+            # else: skip non-dict rows to avoid guessing column indices
+    except Exception as e:
+        print('Error while fetching posts for /api/jobs/locations:', e)
 
+    if not features:
+        # fallback demo features
+        demo_jobs = [
+            {"id": 101, "title": "Barista", "description": "Morning shift near Midtown.", "lat": 38.571, "lng": -121.486, "location":"Midtown, Sacramento"},
+            {"id": 102, "title": "Front Desk", "description": "Evening shift, downtown.", "lat": 38.581, "lng": -121.494, "location":"Downtown"},
+            {"id": 103, "title": "Prep Cook", "description": "Kitchen support role.", "lat": 38.563, "lng": -121.442, "location":"East Sac"},
+        ]
+        for j in demo_jobs:
+            features.append({
+                'type': 'Feature',
+                'geometry': {'type': 'Point', 'coordinates': [j['lng'], j['lat']]},
+                'properties': {
+                    'id': j['id'],
+                    'title': j['title'],
+                    'description': j['description'],
+                    'location': j['location'],
+                    'url': None
+                }
+            })
+
+    return jsonify({'type': 'FeatureCollection', 'features': features})
+    
 @app.route('/dashboard')
 def signedin():
     # Later, you could check if a user is logged in here
