@@ -1,6 +1,7 @@
 import sqlite3
 import bcrypt
 import threading
+import re
 
 DB_PATH = "test.db"
 DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
@@ -166,7 +167,7 @@ class User(Base):
     # auto update after update
     def _trigger_update_modify_time(self):
         self._cur.execute("""
-            CREATE TRIGGER update_user_modify_time
+            CREATE TRIGGER IF NOT EXISTS update_user_modify_time
             AFTER UPDATE ON user
             FOR EACH ROW
             WHEN OLD.modify_time = NEW.modify_time
@@ -185,15 +186,16 @@ class User(Base):
             return False, "password too short"
         
         # check for special character requirement
-        # if ["_", ".", "#", "@", "!"] not in password:
-        #     return False, "need at least one special character"
+        pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+        if not re.match(pattern, password):
+            return False, "password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
         return True, "valid password"
 
     def _validate_user_name(self, user_name:str)->tuple[bool, str]:
         # check user name length
         if len(user_name) < 4:
             return False, "username too short"
-        return True, "valid password"
+        return True, "valid username"
     
     def _validate_phone(self, phone:str)->tuple[bool, str]:
         pass
@@ -202,7 +204,8 @@ class User(Base):
         pass
 
     # actions
-    def create_account(self, user_name:str, password:str, email:str)->tuple[bool, str]:
+    
+    def create_account(self, user_name:str, password:str, email:str, first_name:str=None, last_name:str=None)->tuple[bool, str]:
         # check requirement 
         v1 = self._validate_password(password)
         v2 = self._validate_user_name(user_name)
@@ -215,7 +218,9 @@ class User(Base):
         if not v2[0]:
             return v2
 
-        param = {"user_name":user_name, "password_hash":self._hash(password), "email":email}
+        param = {"user_name":user_name, "password_hash":self._hash(password), "email":email, "first_name": first_name, "last_name": last_name}
+        # remove any None fields (if blank)
+        param = {k: v for k, v in param.items() if v is not None}
         return super()._insert_data(param)
     
     # get
