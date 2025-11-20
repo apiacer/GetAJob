@@ -68,3 +68,26 @@ body {
 .login-link a:hover {
   text-decoration: underline;
 }
+
+.flashes {
+  list-style: none;
+  margin: 10px auto;
+  padding: 0;
+  max-width: 400px;
+}
+
+.flashes li {
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+  text-align: center;
+  color: #fff;
+}
+
+.flashes li.success {
+  background-color: #4caf50;
+}
+
+.flashes li.error {
+  background-color: #f44336;
+}

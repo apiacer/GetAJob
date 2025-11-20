@@ -1,7 +1,9 @@
 import sqlite3
 import bcrypt
 import threading
+import re
 from abc import ABC, abstractmethod
+
 DEBUG = True
 DB_PATH = "test.db"
 DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
@@ -72,21 +74,23 @@ class User(Base):
         hashed = bcrypt.hashpw(data.encode(), bcrypt.gensalt())
         return hashed
 
+    # utils
     def _validate_password(self, password:str)->tuple[bool, str]:
         # check password length
         if len(password) < 8:
             return False, "password too short"
         
         # check for special character requirement
-        # if ["_", ".", "#", "@", "!"] not in password:
-        #     return False, "need at least one special character"
+        pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+        if not re.match(pattern, password):
+            return False, "password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
         return True, "valid password"
 
     def _validate_user_name(self, user_name:str)->tuple[bool, str]:
         # check user name length
         if len(user_name) < 4:
             return False, "username too short"
-        return True, "valid password"
+        return True, "valid username"
     
     def _validate_phone(self, phone:str)->tuple[bool, str]:
         return True, "valid phone number"
@@ -122,7 +126,7 @@ class User(Base):
 
     def _trigger_update_rating(self)->None:
         pass
-
+          
     def _trigger_update_modify_time(self)->None:
         trigger = f"""
             CREATE TRIGGER IF NOT EXISTS update_user_modify_time
@@ -137,7 +141,7 @@ class User(Base):
         """
         self._execute_sql(trigger)
     
-    def create_account(self, user_name:str, password:str, email:str)->tuple[bool, str]:
+    def create_account(self, user_name:str, password:str, email:str, first_name:str=None, last_name:str=None)->tuple[bool, str]:
         val_user_name = self._validate_user_name(user_name)
         val_password = self._validate_password(password)
         val_email = self._validate_email(email)
@@ -155,7 +159,7 @@ class User(Base):
             return False, msg
 
         password_hash = self._hash(password)
-        return self._sql_insert({"user_name":user_name, "password_hash":password_hash, "email":email})
+        return self._sql_insert({"user_name":user_name, "password_hash":password_hash, "email":email, "first_name": first_name, "last_name": last_name})
 
     # log in
     def verify_password(self, user_name:str, password:str)->tuple[bool, str]:

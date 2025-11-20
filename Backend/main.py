@@ -1,6 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from db import Db_api, DB_PATH
 import os
+import re
+import sqlite3
+from werkzeug.security import generate_password_hash, check_password_hash
 import math
 
 # test data
@@ -45,7 +48,7 @@ def home():
     return render_template('index.html', title='Home')
     
 @app.route('/login', methods=["GET", "POST"])
-def login_page():
+def login():
     if request.method == "POST":
         user_name = request.form.get('username')
         password = request.form.get('password')
@@ -67,13 +70,46 @@ def not_found(error):
 def account():
     return render_template('account.html', title='Account')
 
-@app.route('/signup', methods=["GET", "POST"])
+@app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    if request.method == "POST":
-        print(f"name: {request.form.get('name')}")
-        print(f"email: {request.form.get('email')}")
-        print(f"password: {request.form.get('password')}")
-    return render_template('signup.html', title='Sign Up')
+    if request.method == 'POST':
+        fname = request.form.get('fname')
+        lname = request.form.get('lname')
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        # Basic field check
+        if not all([fname, lname, username, email, password]):
+            flash('All fields are required.', 'error')
+            return redirect(url_for('signup'))
+
+        # Call your db layer
+        success, msg = db.user.create_account(username, password, email, fname, lname)
+
+        if not success:
+            flash(msg, 'error')
+            return redirect(url_for('signup'))
+
+        flash('Account created successfully! You can now log in.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('signup.html')
+
+
+@app.route('/check_username')
+def check_username():
+    username = request.args.get('username')
+
+    conn = sqlite3.connect('test.db') # connect to database
+    cur = conn.cursor()
+
+    cur.execute("SELECT 1 FROM user WHERE user_name = ?", (username,))  # table: user, column: user_name
+    exists = cur.fetchone() is not None
+
+    conn.close()
+    return jsonify({"exists": exists})
+
 
 @app.route('/jobs')
 def jobs_list(): ##### CHANGED jobs to match new template structure
