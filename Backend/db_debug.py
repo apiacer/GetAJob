@@ -1,4 +1,4 @@
-from db import Database_api, DB_PATH
+from db import Db_api, DB_PATH
 import random
 import os
 
@@ -7,7 +7,7 @@ def delete_db():
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
-def test_post(db:Database_api):
+def test_post(db:Db_api):
     print("---- test all post functions")
     print("create new post")
     res = db.post.create_post("test_title", "test_description", 1)
@@ -52,26 +52,24 @@ def test_post(db:Database_api):
     print(f"post num after delete: {len(res[1])}")
     print()
 
-
-
-def test_message(db:Database_api):
+def test_message(db:Db_api):
     pass
 
-def test_post_tag(db:Database_api):
+def test_post_tag(db:Db_api):
     pass
 
-def test_tag(db:Database_api):
+def test_tag(db:Db_api):
     pass
 
-def test_user_report(db:Database_api):
+def test_user_report(db:Db_api):
     pass
 
 # do we need a post report seperate from user report? 
-def test_post_report(db:Database_api):
+def test_post_report(db:Db_api):
     pass
 
 # all test case success
-def test_user(db:Database_api):
+def test_user(db:Db_api):
     # test create account
     print("---- test create account ----")
     print("insert invalid user:")
@@ -105,8 +103,11 @@ def test_user(db:Database_api):
     res = db.user.get_user_info("do_not_exist")
     print(res)
     print()
+    os.system("pause")
+
+
     print("update user profile")
-    res = db.user.update_user_profile("test_user", email="new@gmail.com", phone="1234567890", first_name="user_frist_name", last_name="user_last_name")
+    res = db.user.update_user_info("test_user", email="new@gmail.com", phone="1234567890", first_name="user_frist_name", last_name="user_last_name")
     print(res)
     print()
     print("get user info after updated")
@@ -174,7 +175,7 @@ def test_user(db:Database_api):
     print(res)
     print()
 
-def apply_test_data(db:Database_api):
+def apply_test_data(db:Db_api):
     print("---- insert test users ----")
     # generate test user
     test_user = [{"user_name":f"test_user{n+1}", "email":f"test_email{n+1}", "password":f"test_password{n+1}"} for n in range(10)]
@@ -182,18 +183,18 @@ def apply_test_data(db:Database_api):
         res = db.user.create_account(i["user_name"], i["password"], i["email"])
         print(f"add {i['user_name']}: {res}")
 
-    # generate test posts
-    test_post = [{"title":f"test_title{n+1}", "description":f"test_description{n+1}", "owner_id":random.randint(1, 10)} for n in range(10)]
-    for i in test_post:
-        res = db.post.create_post(i["title"], i["description"], i["owner_id"])
-        print(f"add new post: {res}")
+    # # generate test posts
+    # test_post = [{"title":f"test_title{n+1}", "description":f"test_description{n+1}", "owner_id":random.randint(1, 10)} for n in range(10)]
+    # for i in test_post:
+    #     res = db.create_post(i["title"], i["description"], i["owner_id"])
+    #     print(f"add new post: {res}")
 
     print("---- finish adding test data ----\n")
 
 if __name__ == "__main__":
     delete_db()
-    db = Database_api(debug=False)
+    db = Db_api()
     apply_test_data(db)
-    # test_user(db)
-    test_post(db)
+    test_user(db)
+    # test_post(db)
     # db.terminal()
