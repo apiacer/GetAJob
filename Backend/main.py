@@ -115,7 +115,71 @@ def maps():
          "lat": 38.563, "lng": -121.442, "location":"East Sac", "type":"Part-time"},
     ]
     return render_template('maps.html', jobs=jobs, title='Maps')
+    
+@app.route('/api/jobs/locations')
+def api_job_locations():
+    """
+    Returns job locations as a GeoJSON FeatureCollection.
+    This endpoint:
+    - Attempts to read posts via db.post.select_latest_n_posts(...)
+    - Converts any rows that include numeric latitude/longitude into GeoJSON features
+    - Falls back to demo data if no geo-enabled rows are found
+    """
+    features = []
+    try:
+        res = db.post.select_latest_n_posts(1000, 0)
+        rows = res[1] if isinstance(res, (list, tuple)) and len(res) > 1 else res
+        for r in rows:
+            # Support dict rows (recommended). If your DB returns tuples, adapt here.
+            if isinstance(r, dict):
+                lat = r.get('lat') or r.get('latitude') or r.get('latitude_float')
+                lng = r.get('lng') or r.get('longitude') or r.get('longitude_float')
+                try:
+                    lat = float(lat) if lat is not None else None
+                    lng = float(lng) if lng is not None else None
+                except Exception:
+                    lat = None
+                    lng = None
+                if lat is None or lng is None:
+                    continue
+                props = {
+                    'id': r.get('id'),
+                    'title': r.get('title'),
+                    'description': r.get('description'),
+                    'location': r.get('location'),
+                    'url': r.get('url')
+                }
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
+                    'properties': props
+                })
+            # else: skip non-dict rows to avoid guessing column indices
+    except Exception as e:
+        print('Error while fetching posts for /api/jobs/locations:', e)
 
+    if not features:
+        # fallback demo features
+        demo_jobs = [
+            {"id": 101, "title": "Barista", "description": "Morning shift near Midtown.", "lat": 38.571, "lng": -121.486, "location":"Midtown, Sacramento"},
+            {"id": 102, "title": "Front Desk", "description": "Evening shift, downtown.", "lat": 38.581, "lng": -121.494, "location":"Downtown"},
+            {"id": 103, "title": "Prep Cook", "description": "Kitchen support role.", "lat": 38.563, "lng": -121.442, "location":"East Sac"},
+        ]
+        for j in demo_jobs:
+            features.append({
+                'type': 'Feature',
+                'geometry': {'type': 'Point', 'coordinates': [j['lng'], j['lat']]},
+                'properties': {
+                    'id': j['id'],
+                    'title': j['title'],
+                    'description': j['description'],
+                    'location': j['location'],
+                    'url': None
+                }
+            })
+
+    return jsonify({'type': 'FeatureCollection', 'features': features})
+    
 @app.route('/dashboard')
 def signedin():
     # Later, you could check if a user is logged in here
