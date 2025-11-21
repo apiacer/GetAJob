@@ -68,7 +68,7 @@
       const emailStatus = document.getElementById('email-status');
       emailField.addEventListener('input', () => {
         const valid = /^[^@]+@[^@]+\.[^@]+$/.test(emailField.value);
-        emailStatus.textContent = valid ? "✅ Valid email" : "❌ Invalid email";
+        emailStatus.textContent = valid ? "Valid email format" : "Invalid email format";
         emailStatus.style.color = valid ? "green" : "red";
       });
 
@@ -80,7 +80,7 @@
         // at least 1 lowercase, 1 uppercase, 1 digit, 8+ chars
         const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(value);
         pwStatus.textContent = strong
-          ? "✅ Strong password"
+          ? "Strong password"
           : "⚠️ Weak (Use 8+ characters with 1 uppercase, 1 number, and 1 special character.)";
         pwStatus.style.color = strong ? "green" : "orange";
       });
@@ -102,7 +102,7 @@
         const value = usernameField.value.trim(); // remove spaces first
         console.log('Username length:', value.length);
         if (value.length < 4) {
-          userStatus.textContent = "❌ Username must be at least 4 characters";
+          userStatus.textContent = "Username must be at least 4 characters";
           userStatus.style.color = "red";
           return;
         }
@@ -114,15 +114,15 @@
           console.log('Response:', data);      
 
           if (data.exists) {
-            userStatus.textContent = "❌ Username already taken";
+            userStatus.textContent = "Username already taken";
             userStatus.style.color = "red";
           } else {
-            userStatus.textContent = "✅ Username available";
+            userStatus.textContent = "Username available";
             userStatus.style.color = "green";
           }
         } catch (err) {
           console.error(err);
-          userStatus.textContent = "⚠️ Error checking username";
+          userStatus.textContent = "Error checking username";
           userStatus.style.color = "orange";
         }
       });

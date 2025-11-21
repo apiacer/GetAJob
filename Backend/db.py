@@ -96,6 +96,10 @@ class User(Base):
         return True, "valid phone number"
 
     def _validate_email(self, email:str)->tuple[bool, str]:
+        # basic pattern for email: text@text.text
+        pattern = r'^[^@]+@[^@]+\.[^@]+$'
+        if not re.match(pattern, email):
+            return False, "Invalid email format"
         return True, "valid email"
 
     # sql
@@ -116,6 +120,7 @@ class User(Base):
                 pfp BLOB,
                 avg_rating INTEGER,
                 rate_num INTEGER,
+                is_verified BOOLEAN DEFAULT 0,  -- added column for email verification status
                 is_admin BOOLEAN DEFAULT 0,
                 is_banned BOOLEAN DEFAULT 0,
                 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
