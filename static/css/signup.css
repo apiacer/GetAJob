@@ -91,3 +91,24 @@ body {
 .flashes li.error {
   background-color: #f44336;
 }
+
+.flashes {
+  list-style: none;
+  padding: 0;
+  margin: 15px auto;
+  max-width: 400px;
+}
+
+.flashes li {
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  text-align: center;
+  color: #fff;
+  font-weight: 600;
+}
+
+.flashes li.info {
+  background-color: #2196f3; /* blue */
+}
+
