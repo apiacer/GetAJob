@@ -400,7 +400,6 @@ class User(Base):
         """
         return self._execute_sql(sql)
     
-
 class Post(Base):
     def __init__(self, db_path, debug = False):
         super().__init__(db_path, debug)
