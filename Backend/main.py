@@ -4,6 +4,8 @@ import os
 import re
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 import math
 
 # test data
@@ -28,6 +30,18 @@ app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
 # demo data (swap for DB later)
 
+# SMTP configuration for Flask-Mail
+app.config.update(
+    MAIL_SERVER='sandbox.smtp.mailtrap.io',
+    MAIL_PORT=2525,
+    MAIL_USERNAME='9c626db099d0e7',
+    MAIL_PASSWORD='4137b68a275c8b', 
+    MAIL_USE_TLS=True,
+    MAIL_USE_SSL=False,
+    MAIL_DEFAULT_SENDER=('GetAJob Team', 'no-reply@getajob.com')
+)
+mail = Mail(app)
+s = URLSafeTimedSerializer(app.secret_key)
 
 # add to database
 def add_data():
@@ -84,17 +98,57 @@ def signup():
             flash('All fields are required.', 'error')
             return redirect(url_for('signup'))
 
-        # Call your db layer
+        # Call db layer
         success, msg = db.user.create_account(username, password, email, fname, lname)
 
+         # Handle response
         if not success:
-            flash(msg, 'error')
+            if "UNIQUE constraint failed: user.email" in msg:
+                flash("That email is already registered. Please use a different one.", "error")
+            elif "UNIQUE constraint failed: user.user_name" in msg:
+                flash("That username is already taken.", "error")
+            else:
+                flash("Something went wrong while creating your account.", "error")
             return redirect(url_for('signup'))
 
-        flash('Account created successfully! You can now log in.', 'success')
+        ### Email verification on success ###
+
+        # generate token using user email
+        token = s.dumps(email, salt='email-confirm')
+
+        # create confirmation link
+        confirm_url = url_for('confirm_email', token=token, _external=True)
+
+        # send email
+        msg = Message("Confirm your GetAJob account" , recipients=[email])
+        msg.body = f"Howdy {fname}, \n\nThis is totally not a scam! Please confirm your email address by clicking the link below:\n\n{confirm_url}\n\nIf you did not sign up for a GetAJob account, please ignore this email."
+
+        flash('Account created successfully!', 'success')
+        mail.send(msg)
+
+        flash('A confirmation email has been sent to your email address. Please verify to activate your account.', 'info')
         return redirect(url_for('login'))
 
     return render_template('signup.html')
+
+#email confirmation route
+@app.route('/confirm_email/<token>')
+def confirm_email(token):
+    try:
+        email = s.loads(token, salt='email-confirm', max_age=3600)  # 1 hour expiration
+    except SignatureExpired:
+        flash('The confirmation link has expired. Go to login', 'error')
+        return redirect(url_for('login'))
+
+    # update user record to set is_verified = 1
+    conn = sqlite3.connect('test.db')
+    cur = conn.cursor()
+    cur.execute("UPDATE user SET is_verified = 1 WHERE email = ?", (email,))
+    conn.commit()
+    conn.close()
+
+    flash('Your email has been confirmed! You can now log in.', 'success')
+    return redirect(url_for('login'))
 
 
 @app.route('/check_username')
@@ -419,6 +473,11 @@ def admin():
     # if not session.get("is_admin"): return redirect("/")
     return render_template('admin.html', title='Admin Panel')
 
+# Global error handler for database integrity errors
+@app.errorhandler(sqlite3.IntegrityError)
+def handle_db_error(e):
+    flash("Database constraint error. Please check your input.", "error")
+    return redirect(request.referrer or url_for('home'))
 
 if __name__ == '__main__':
     app.run(debug=True)
