@@ -11,13 +11,14 @@ DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
 class Base:
     tables = []
 
-    def __init__(self, db_path:str, debug:bool=False):
-        self.name = None
+    def __init__(self, name:str, db_path:str, debug:bool=False, ):
+        self.name = name
         self.db_path = db_path
         self.debug = debug
+        Base.tables.append(self.name)
     
     # sql 
-    def _execute_sql(self, sql:str, params:list|tuple=None)->tuple[bool, list|None]:
+    def _execute_sql(self, sql:str, params:list|tuple=None)->tuple[bool, list[dict]|None]:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
@@ -50,7 +51,7 @@ class Base:
             return False, msg 
         
     def _sql_insert(self, param:dict)->tuple[bool, list|None]:
-        param = {key:val for key, val in param.items() if val}
+        param = {key:val for key, val in param.items() if val is not None}
         columns = ", ".join(param.keys())
         placeholders = ", ".join("?" for _ in param) 
         val = list(param.values())
@@ -62,11 +63,9 @@ class Base:
     
 class User(Base):
     def __init__(self, db_path:str, debug:bool = True):
-        super().__init__(db_path, debug)
-        self.name = "user"
+        super().__init__("user", db_path, debug)
         self._create_table()
         self._trigger_update_modify_time()
-        User.tables.append(self.name)
         
     # utils for user
     @staticmethod
@@ -92,6 +91,7 @@ class User(Base):
             return False, "username too short"
         return True, "valid username"
     
+    # -------- need to add validate phone logic -------------
     def _validate_phone(self, phone:str)->tuple[bool, str]:
         return True, "valid phone number"
 
@@ -128,10 +128,6 @@ class User(Base):
             );
         """
         self._execute_sql(table)
-
-    # if need rating
-    def _trigger_update_rating(self)->None:
-        pass
           
     def _trigger_update_modify_time(self)->None:
         trigger = f"""
@@ -179,8 +175,11 @@ class User(Base):
         if not res[0]:
             return res
         
+        if not res[1]:
+            return False, "user not found"
+        
         # Verify password with bcrypt
-        if bcrypt.checkpw(password.encode(), res[1][0]):
+        if bcrypt.checkpw(password.encode(), res[1][0].get("password_hash")):
             return True, "log in success"
 
         return False, "Invalid password"
@@ -408,10 +407,10 @@ class User(Base):
     
 class Post(Base):
     def __init__(self, db_path, debug = False):
-        super().__init__(db_path, debug)
-        self.name="post"
+        super().__init__("post", db_path, debug)
         self._create_table()
         self._trigger_update_modify_time()
+
 
     def _create_table(self):
         sql = f"""
@@ -421,6 +420,8 @@ class Post(Base):
                 description TEXT NOT NULL,
                 owner_id INTEGER NOT NULL REFERENCES user(user_id) ON DELETE CASCADE,
                 location TEXT,
+                latitude REAL, 
+                longitude REAL,
                 budget TEXT,
                 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                 modify_time DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -428,11 +429,15 @@ class Post(Base):
         """
 
         return self._execute_sql(sql)
-
+    
+    # ---- need to implement logic with geopy ----
+    def _trigger_insert_cords(self):
+        pass
+    
     def _trigger_update_modify_time(self):
         sql = f"""
             CREATE TRIGGER IF NOT EXISTS update_post_modify_time
-            AFTER UPDATE ON post
+            AFTER UPDATE ON {self.name}
             FOR EACH ROW
             WHEN OLD.modify_time = NEW.modify_time
             BEGIN
@@ -443,36 +448,6 @@ class Post(Base):
         """
 
         return self._execute_sql(sql)
-    
-    def set_post_tags(self, post_id:int, tags:list)->tuple[bool, str]:
-        # normalize input list
-        tags = [t.strip() for t in (tags or []) if t and t.strip()]
-        # clear existing links
-        self._execute_sql("DELETE FROM post_tag WHERE post_id = ?", [post_id])
-        if not tags:
-            return True, "ok"
-        for t in tags:
-            self._execute_sql("INSERT OR IGNORE INTO tags(tag_name) VALUES (?)", [t])
-            ok, rows = self._execute_sql("SELECT tag_id FROM tags WHERE tag_name = ?", [t])
-            if ok and rows:
-                tag_id = rows[0]["tag_id"]
-                self._execute_sql(
-                    "INSERT OR IGNORE INTO post_tag(post_id, tag_id) VALUES (?, ?)",
-                    [post_id, tag_id]
-                )
-        return True, "ok"
-    
-    def get_post_tags(self, post_id:int)->tuple[bool, list]:
-        sql = """
-            SELECT t.tag_name
-            FROM post_tag pt JOIN tags t ON pt.tag_id = t.tag_id
-            WHERE pt.post_id = ?
-            ORDER BY t.tag_name
-        """
-        ok, rows = self._execute_sql(sql, [post_id])
-        if not ok:
-            return ok, []
-        return True, [r["tag_name"] for r in rows]
     
     def get_last_post_id(self)->tuple[bool, list]:
         # minimal helper to fetch last inserted id without modifying _sql_insert
@@ -529,12 +504,24 @@ class Post(Base):
     def select_user_post(self, user_id:int):
         sql = f"""
         SELECT * FROM {self.name}
-        WHERE user_id=?
+        WHERE owner_id=?
         """
         return self._execute_sql(sql, [user_id])
 
+    '''
+    filter = {
+        "limit":5,
+        "offset":0,
+        "key_words":None,
+        "geo"{
+            "loc": None,
+            "dist": None
+        }
+    }
+    '''
     def search_posts(self, limit: int = 5, offset: int = 0,
-                    tags: list = None, key_words: list = None, location: str = None):
+                    tags: list = None, key_words: list = None, 
+                    location: str = None, dist: int = None):
         
         key_words = key_words or []   # ensure list
         tags = tags or []             # ensure list
@@ -588,6 +575,7 @@ class Message(Base):
         super().__init__(db_path, debug)
         self.name = "message"
         self._create_table()
+        Message.tables.append(self.name)
 
     def _create_table(self):
         sql = f"""
@@ -711,6 +699,7 @@ class User_rating(Base):
     def __init__(self, db_path, debug = False):
         super().__init__(db_path, debug)
 
+# wrapper
 class Db_api:
     def __init__(self, db_path:str=None, debug:bool=True):
         if not db_path:
