@@ -10,6 +10,7 @@
     <h1>{{ post.title }}</h1>
     <p>{{ post.description }}</p>
     <p><strong>Location:</strong> {{ post.location or 'N/A' }}</p>
+    <p><strong>Budget:</strong> {{ post.budget }}</p>
     <p>
         <strong>Availability:</strong>
         {% set flags = [] %}

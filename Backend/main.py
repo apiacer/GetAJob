@@ -167,8 +167,11 @@ def check_username():
 
 @app.route('/jobs')
 def jobs_list(): ##### CHANGED jobs to match new template structure
+    ##location = "1151 57th St"
+
     # --- Query parameters ---
     q = request.args.get('q', '').strip()
+    location = request.args.get('location', '').strip()
     raw_tags = request.args.get('tags', '').strip()
     page_num = int(request.args.get('page', 1))
 
@@ -179,7 +182,7 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
     keywords = [w for w in q.split() if w] if q else None
 
     # Pagination settings
-    ITEMS_PER_PAGE = 10
+    ITEMS_PER_PAGE = 5
     offset = (page_num - 1) * ITEMS_PER_PAGE
 
     # --- Query database ---
@@ -187,7 +190,8 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
         limit=ITEMS_PER_PAGE + 1,  # fetch 1 extra to detect "next page"
         offset=offset,
         tags=tags,
-        key_words=keywords
+        key_words=keywords,
+        location=location
     )
 
     if not ok:
@@ -208,8 +212,20 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
         hide_prev=hide_prev,
         hide_next=hide_next,
         q=q,
-        tags=raw_tags
+        tags=raw_tags,
+        location=location
     )
+
+def submit_form():
+    # Get the user input from the form
+    user_input = request.form['username']
+    
+    # Process the input (e.g., save to a database, modify it)
+    new_default_value = f"Updated: {user_input}"
+    
+    # Redirect back to the form page, passing the new value as a query parameter
+    # or render a new template with the value
+    return redirect(url_for('index', current_username=new_default_value))
 
 ######## Job detail page (minimal) ############ CHANGED FROM HERE
 '''
@@ -253,6 +269,7 @@ def job_create():
     title = request.form.get("title", "").strip()
     description = request.form.get("description", "").strip()
     location = request.form.get("location", "").strip()
+    budget = request.form.get("budget", "").strip()
     raw_tags = request.form.get("tags", "").strip()
 
     # required fields (keep simple)
@@ -264,7 +281,7 @@ def job_create():
     owner_id = 1
 
     # create post (no change to teammate DB API)
-    ok, res = db.post.create_post(title, description, owner_id, location)
+    ok, res = db.post.create_post(title, description, owner_id, location, budget)
     if not ok:
         flash(f"DB error creating post: {res}", "error")
         return redirect(url_for('job_new'))
