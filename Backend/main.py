@@ -169,6 +169,7 @@ def check_username():
 def jobs_list(): ##### CHANGED jobs to match new template structure
     # --- Query parameters ---
     q = request.args.get('q', '').strip()
+    location = request.args.get('location', '').strip()
     raw_tags = request.args.get('tags', '').strip()
     page_num = int(request.args.get('page', 1))
 
@@ -187,7 +188,8 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
         limit=ITEMS_PER_PAGE + 1,  # fetch 1 extra to detect "next page"
         offset=offset,
         tags=tags,
-        key_words=keywords
+        key_words=keywords,
+        location=location
     )
 
     if not ok:

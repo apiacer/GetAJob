@@ -13,7 +13,8 @@
 
   <form method="get" action="{{ url_for('jobs_list') }}">
     <input type="text" name="q" placeholder="Search title/description" value="{{ q or '' }}">
-    <input type="text" name="tags" placeholder="tags (comma-separated)" value="{{ tags or '' }}">
+    <input type="text" name="location" value="1151 57th St" value="{{ location or '' }}">
+    <input type="text" name="tags" placeholder="Tags (comma-separated)" value="{{ tags or '' }}">
     <button type="submit">Search</button>
   </form>
 

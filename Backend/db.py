@@ -550,8 +550,8 @@ class Post(Base):
         """
         return self._execute_sql(sql, [user_id])
 
-    def search_posts(self, limit: int = 10, offset: int = 0,
-                    tags: list = None, key_words: list = None):
+    def search_posts(self, limit: int = 5, offset: int = 0,
+                    tags: list = None, key_words: list = None, location: str = None):
         
         key_words = key_words or []   # ensure list
         tags = tags or []             # ensure list
