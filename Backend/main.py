@@ -167,6 +167,8 @@ def check_username():
 
 @app.route('/jobs')
 def jobs_list(): ##### CHANGED jobs to match new template structure
+    ##location = "1151 57th St"
+
     # --- Query parameters ---
     q = request.args.get('q', '').strip()
     location = request.args.get('location', '').strip()
@@ -210,8 +212,20 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
         hide_prev=hide_prev,
         hide_next=hide_next,
         q=q,
-        tags=raw_tags
+        tags=raw_tags,
+        location=location
     )
+
+def submit_form():
+    # Get the user input from the form
+    user_input = request.form['username']
+    
+    # Process the input (e.g., save to a database, modify it)
+    new_default_value = f"Updated: {user_input}"
+    
+    # Redirect back to the form page, passing the new value as a query parameter
+    # or render a new template with the value
+    return redirect(url_for('index', current_username=new_default_value))
 
 ######## Job detail page (minimal) ############ CHANGED FROM HERE
 '''
