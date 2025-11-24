@@ -179,7 +179,7 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
     keywords = [w for w in q.split() if w] if q else None
 
     # Pagination settings
-    ITEMS_PER_PAGE = 10
+    ITEMS_PER_PAGE = 5
     offset = (page_num - 1) * ITEMS_PER_PAGE
 
     # --- Query database ---
@@ -253,6 +253,7 @@ def job_create():
     title = request.form.get("title", "").strip()
     description = request.form.get("description", "").strip()
     location = request.form.get("location", "").strip()
+    budget = request.form.get("budget", "").strip()
     raw_tags = request.form.get("tags", "").strip()
 
     # required fields (keep simple)
@@ -264,7 +265,7 @@ def job_create():
     owner_id = 1
 
     # create post (no change to teammate DB API)
-    ok, res = db.post.create_post(title, description, owner_id, location)
+    ok, res = db.post.create_post(title, description, owner_id, location, budget)
     if not ok:
         flash(f"DB error creating post: {res}", "error")
         return redirect(url_for('job_new'))

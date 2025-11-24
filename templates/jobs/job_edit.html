@@ -12,6 +12,7 @@
     <label>Title <input name="title" value="{{ post.title }}" required></label><br>
     <label>Description <textarea name="description" required>{{ post.description }}</textarea></label><br>
     <label>Location <input name="location" value="{{ post.location or '' }}" required></label><br>
+    <label>Budget <input name="budget" required></label><br>
     <label>Tags (comma-separated) <input name="tags" value="{{ tags or '' }}"></label><br>
     <fieldset>
       <legend>Availability</legend>
