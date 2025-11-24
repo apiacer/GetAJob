@@ -46,6 +46,8 @@ def test_user(db: Db_api):
     print(db.user.delete_user("test_user"))
     print()
 
+    print("9. verify_password")
+    print(db.user.verify_password("dne", "dne"))
 
 # ---------------------------------------------------
 # Test Post Module

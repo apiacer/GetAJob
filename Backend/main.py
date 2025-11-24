@@ -3,10 +3,11 @@ from db import Db_api, DB_PATH
 import os
 import re
 import sqlite3
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
-import math
+from dotenv import load_dotenv
+# loads .env into environment variables
+load_dotenv()
 
 # test data
 JOB_DATA = [
@@ -18,33 +19,50 @@ JOB_DATA = [
 ]
 
 USER_DATA = [
-    {"user_name": "chen", "email":"chenwang@csus.edu", "password":"asdfasdf"},
-    {"user_name": "miles", "email":"mboyle@csus.edu", "password":"asdfasdf"},
-    {"user_name":"jared", "email":"jaredshicks@csus.edu", "password":"asdfasdf"}
+    {"user_name": "chen", "email":"chenwang@csus.edu", "password":"Aa12345_"},
+    {"user_name": "miles", "email":"mboyle@csus.edu", "password":"Aa12345_"},
+    {"user_name":"jared", "email":"jaredshicks@csus.edu", "password":"Aa12345_"}
 ]
 
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+def delete_db():
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+delete_db()
 
-db = Db_api()
+db = Db_api(debug=False)
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
-# demo data (swap for DB later)
+
+# moved all smtp config data to .env file 
+"""
+MAIL_SERVER=sandbox.smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=9c626db099d0e7
+MAIL_PASSWORD=4137b68a275c8b
+MAIL_USE_TLS=True
+MAIL_USE_SSL=False
+MAIL_DEFAULT_SENDER_NAME="GetAJob Team"
+MAIL_DEFAULT_SENDER_EMAIL=no-reply@getajob.com
+"""
 
 # SMTP configuration for Flask-Mail
 app.config.update(
-    MAIL_SERVER='sandbox.smtp.mailtrap.io',
-    MAIL_PORT=2525,
-    MAIL_USERNAME='9c626db099d0e7',
-    MAIL_PASSWORD='4137b68a275c8b', 
-    MAIL_USE_TLS=True,
-    MAIL_USE_SSL=False,
-    MAIL_DEFAULT_SENDER=('GetAJob Team', 'no-reply@getajob.com')
+    MAIL_SERVER=os.getenv("MAIL_SERVER"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT")),
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"), 
+    MAIL_USE_TLS=os.getenv("MAIL_USE_TLS") == "True",
+    MAIL_USE_SSL=os.getenv("MAIL_USE_SSL") == "True",
+    MAIL_DEFAULT_SENDER=(os.getenv("MAIL_DEFAULT_SENDER_NAME"), os.getenv("MAIL_DEFAULT_SENDER_EMAIL"))
 )
 mail = Mail(app)
 s = URLSafeTimedSerializer(app.secret_key)
 
+
 # add to database
 def add_data():
+    
     for user in USER_DATA:
         res = db.user.create_account(user["user_name"], user["password"], user["email"])
         print(res)
@@ -54,7 +72,7 @@ def add_data():
         print(res)
 
 
-##add_data() #disable after first run to avoid duplicates
+add_data() 
 
 
 @app.route('/')
@@ -69,12 +87,21 @@ def login():
         res = db.user.verify_password(user_name, password)
         if res[0]:
             # add to session
-            return redirect()
+            session["user_name"] = user_name
+            user_id = db.user.get_user_info(user_name=user_name)[1].get("user_id")
+            print(f"logged in user_id: {user_id}")
+            session["user_id"] = user_id
+
+            # ---- redirect to whatever page ----
+            return render_template('login.html', title='login')
 
         else:
-            pass
+            # ---- show login fail ----
+            print(f"login fail: {res}") # temp
+            return render_template('login.html', title='login')
 
-    return render_template('login.html', title='login')
+    elif request.method == "GET":
+        return render_template('login.html', title='login')
 
 @app.errorhandler(404)
 def not_found(error):

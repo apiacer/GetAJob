@@ -47,6 +47,7 @@ __pycache__/
 instance/
 *.sqlite3
 *.db
+.env
 
 # Node / Frontend stuff
 node_modules/

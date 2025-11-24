@@ -23,6 +23,7 @@ class Base:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cur = conn.cursor()
+                cur.execute("PRAGMA foreign_keys = ON")
                 if params is None:
                     cur.execute(sql)
                 else:
@@ -80,9 +81,10 @@ class User(Base):
             return False, "password too short"
         
         # check for special character requirement
-        pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+        pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_])[A-Za-z\d@$!%*?&_]{8,}$'
         if not re.match(pattern, password):
             return False, "password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
+        
         return True, "valid password"
 
     def _validate_user_name(self, user_name:str)->tuple[bool, str]:
@@ -168,9 +170,9 @@ class User(Base):
         sql = f"""
             SELECT password_hash
             FROM {self.name}
-            WHERE user_name = ?;
+            WHERE user_name=?;
         """
-        res = self._execute_sql(sql, user_name)
+        res = self._execute_sql(sql, (user_name, ))
         
         if not res[0]:
             return res
@@ -419,7 +421,6 @@ class Post(Base):
         super().__init__("post", db_path, debug)
         self._create_table()
         self._trigger_update_modify_time()
-
 
     def _create_table(self):
         sql = f"""
@@ -724,7 +725,38 @@ class Db_api:
         self.post_tag = Post_tag(db_path, debug)
         self.tag = Tag(db_path, debug)
         self.message = Message(db_path, debug)
+
+        # enable FK enforcement after creat all tables
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
     
+# call terminal to manual check databse for debug 
+def terminal():
+    print("in terminal")
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    while True:
+        msg = input()
+        if msg == "commit":
+            conn.commit()
+
+        elif msg == "rollback":
+            conn.rollback()
+
+        elif msg == "q":
+            print("quit terminal")
+            break
+
+        try:
+            cur.execute(msg)
+            rows = cur.fetchall()
+            print(rows)
+
+        except Exception as e:
+            print(e)
 
 if __name__ == "__main__":
-    Db_api(DB_PATH, DEBUG)
+    db = Db_api(DB_PATH, False)
+    terminal()
