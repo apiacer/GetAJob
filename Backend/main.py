@@ -6,6 +6,12 @@ import sqlite3
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from dotenv import load_dotenv
+
+def delete_db():
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+delete_db()
+
 # loads .env into environment variables
 load_dotenv()
 
@@ -24,27 +30,9 @@ USER_DATA = [
     {"user_name":"jared", "email":"jaredshicks@csus.edu", "password":"Aa12345_"}
 ]
 
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-def delete_db():
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-delete_db()
-
 db = Db_api(debug=False)
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
-
-# moved all smtp config data to .env file 
-"""
-MAIL_SERVER=sandbox.smtp.mailtrap.io
-MAIL_PORT=2525
-MAIL_USERNAME=9c626db099d0e7
-MAIL_PASSWORD=4137b68a275c8b
-MAIL_USE_TLS=True
-MAIL_USE_SSL=False
-MAIL_DEFAULT_SENDER_NAME="GetAJob Team"
-MAIL_DEFAULT_SENDER_EMAIL=no-reply@getajob.com
-"""
 
 # SMTP configuration for Flask-Mail
 app.config.update(
@@ -56,6 +44,15 @@ app.config.update(
     MAIL_USE_SSL=os.getenv("MAIL_USE_SSL") == "True",
     MAIL_DEFAULT_SENDER=(os.getenv("MAIL_DEFAULT_SENDER_NAME"), os.getenv("MAIL_DEFAULT_SENDER_EMAIL"))
 )
+# app.config.update(
+#     MAIL_SERVER='sandbox.smtp.mailtrap.io',
+#     MAIL_PORT=2525,
+#     MAIL_USERNAME='9c626db099d0e7',
+#     MAIL_PASSWORD='4137b68a275c8b', 
+#     MAIL_USE_TLS=True,
+#     MAIL_USE_SSL=False,
+#     MAIL_DEFAULT_SENDER=('GetAJob Team', 'no-reply@getajob.com')
+# )
 mail = Mail(app)
 s = URLSafeTimedSerializer(app.secret_key)
 
@@ -168,29 +165,26 @@ def confirm_email(token):
         return redirect(url_for('login'))
 
     # update user record to set is_verified = 1
-    conn = sqlite3.connect('test.db')
-    cur = conn.cursor()
-    cur.execute("UPDATE user SET is_verified = 1 WHERE email = ?", (email,))
-    conn.commit()
-    conn.close()
+    db.user.admin_action(email=email, is_verified=True)
 
     flash('Your email has been confirmed! You can now log in.', 'success')
     return redirect(url_for('login'))
 
 
+# when sign up check if username already taken
 @app.route('/check_username')
 def check_username():
     username = request.args.get('username')
+    res = db.user.get_user_info(user_name=username)
+    return jsonify({"exists": res[0]})
 
-    conn = sqlite3.connect('test.db') # connect to database
-    cur = conn.cursor()
-
-    cur.execute("SELECT 1 FROM user WHERE user_name = ?", (username,))  # table: user, column: user_name
-    exists = cur.fetchone() is not None
-
-    conn.close()
-    return jsonify({"exists": exists})
-
+# when sign up chek if email already taken
+# ---- need to wire it to the front end sign up page
+@app.route('/check_email')
+def check_email():
+    email = request.args.get('email')
+    res = db.user.get_user_info(email=email)
+    return jsonify({"exists": res[0]})
 
 @app.route('/jobs')
 def jobs_list(): ##### CHANGED jobs to match new template structure
@@ -243,7 +237,10 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
         location=location
     )
 
+# tf is this???
 def submit_form():
+    print("in submit_form") # debug
+    
     # Get the user input from the form
     user_input = request.form['username']
     
@@ -390,8 +387,6 @@ def upload_success():
     post_id = request.args.get("id")
     return render_template('jobs/upload_success.html', post_id=post_id, title="Success")
 
-
-
 ##### Maps page with job locations #####
 @app.route('/maps')
 def maps():
@@ -524,4 +519,4 @@ def handle_db_error(e):
     return redirect(request.referrer or url_for('home'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)

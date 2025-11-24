@@ -10,7 +10,7 @@ DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
 
 class Base:
     tables = []
-
+    _lock = threading.Lock()
     def __init__(self, name:str, db_path:str, debug:bool=False, ):
         self.name = name
         self.db_path = db_path
@@ -20,25 +20,27 @@ class Base:
     # sql 
     def _execute_sql(self, sql:str, params:list|tuple=None)->tuple[bool, list[dict]|None]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cur = conn.cursor()
-                cur.execute("PRAGMA foreign_keys = ON")
-                if params is None:
-                    cur.execute(sql)
-                else:
-                    cur.execute(sql, params)
-                res = cur.fetchall()
-                res = [dict(row) for row in res]
-                if self.debug:
-                    print(
-                        f"---- debug info ----\n"
-                        f"execute sql:\n{sql}\n\n"
-                        f"params:\n{params}\n\n"
-                        f"res:\n{res}\n\n"
-                        f"----------------\n"
-                    )
-                return True, res
+            with Base._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cur = conn.cursor()
+                    cur.execute("PRAGMA foreign_keys = ON")
+
+                    if params is None:
+                        cur.execute(sql)
+                    else:
+                        cur.execute(sql, params)
+                    res = cur.fetchall()
+                    res = [dict(row) for row in res]
+                    if self.debug:
+                        print(
+                            f"---- debug info ----\n"
+                            f"execute sql:\n{sql}\n\n"
+                            f"params:\n{params}\n\n"
+                            f"res:\n{res}\n\n"
+                            f"----------------\n"
+                        )
+                    return True, res
         
         except Exception as e:
             msg = (
@@ -705,6 +707,39 @@ class Tag(Base):
         
         return True, res[1][0].get("tag_id")
 
+class Counter(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__("counter", db_path, debug)
+        self._create_table()
+        self._add_default_row()
+        self._trigger_update_post_cnt()
+        self._trigger_update_user_cnt()
+        
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS counter (
+                name TEXT PRIMARY KEY,
+                num INTEGER NOT NULL DEFAULT 0
+            );
+        """
+        return self._execute_sql(sql)
+    
+    def _add_default_row(self):
+        res = self._sql_insert({"name":"user"})
+        res = self._sql_insert({"name":"post"})
+
+    def _trigger_update_user_cnt(self):
+        pass
+
+    def _trigger_update_post_cnt(self):
+        pass
+    
+    def get_user_count(self):
+        pass
+
+    def get_post_count(self):
+        pass
+
 # to be continued....
 class Report(Base):
     def __init__(self, db_path, debug = False):
@@ -725,11 +760,6 @@ class Db_api:
         self.post_tag = Post_tag(db_path, debug)
         self.tag = Tag(db_path, debug)
         self.message = Message(db_path, debug)
-
-        # enable FK enforcement after creat all tables
-        conn = sqlite3.connect(db_path)
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.commit()
     
 # call terminal to manual check databse for debug 
 def terminal():
