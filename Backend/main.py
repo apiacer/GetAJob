@@ -336,7 +336,7 @@ def job_update(post_id):
         post_id,
         title=title if title else None,
         description=description if description else None,
-        locaiton=location if location else None  # <- yes, spelled 'locaiton' in teammate code
+        location=location if location else None  # <- yes, spelled 'locaiton' in teammate code
     )
 
     # rebuild tags

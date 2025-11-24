@@ -120,7 +120,7 @@ class User(Base):
                 pfp BLOB,
                 avg_rating INTEGER,
                 rate_num INTEGER,
-                is_verified BOOLEAN DEFAULT 0,  -- added column for email verification status
+                is_verified BOOLEAN DEFAULT 0,
                 is_admin BOOLEAN DEFAULT 0,
                 is_banned BOOLEAN DEFAULT 0,
                 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -363,12 +363,13 @@ class User(Base):
         return self._execute_sql(sql, [condition_val])
     
     # admin
-    def admin_action(self, user_name:str=None, user_id:int=None, email:str=None, is_banned:bool=None, is_admin:bool=None):
+    def admin_action(self, user_name:str=None, user_id:int=None, email:str=None, is_banned:bool=None, is_admin:bool=None, is_verified:bool=None):
         if not user_name and not user_id and not email:
             return False, "please enter either user_name, user_id or email"
 
-        if not is_admin and not is_banned:
+        if not is_admin and not is_banned and not is_verified:
             return False, "please enter an action to perform"
+        
         elif user_name:
             condition_clause = "user_name"
             condition_val = user_name
@@ -387,7 +388,7 @@ class User(Base):
                 SET is_banned=1
                 WHERE {condition_clause}=?
             """
-            return self._execute_sql(sql, [condition_val])
+            return self._execute_sql(sql, (condition_val, ))
         
         if is_admin:
             sql = f"""
@@ -395,8 +396,16 @@ class User(Base):
                 SET is_admin=1
                 WHERE {condition_clause}=?
             """
-            return self._execute_sql(sql, [condition_val])
+            return self._execute_sql(sql, (condition_val, ))
     
+        if is_verified:
+            sql = f"""
+                UPDATE {self.name}
+                SET is_verified=1
+                WHERE {condition_clause}=?
+            """
+            return self._execute_sql(sql, (condition_val, ))
+        
     def get_all_banned_user(self)->tuple[bool, list]:
         sql = f"""
             SELECT * 
@@ -456,7 +465,7 @@ class Post(Base):
     def create_post(self, title:str, description:str, owner_id:int, location:str=None, budget:str=None):
         return self._sql_insert({"title":title, "description":description, "owner_id":owner_id, "location":location, "budget":budget})
     
-    def update_post(self, post_id:int, title:str=None, description:str=None, locaiton:str=None, budget:str=None):
+    def update_post(self, post_id:int, title:str=None, description:str=None, location:str=None, budget:str=None):
         set_clause = []
         param = []
 
@@ -468,9 +477,9 @@ class Post(Base):
             set_clause.append("description=?")
             param.append(description)
 
-        if locaiton:
+        if location:
             set_clause.append("location=?")
-            param.append(locaiton)
+            param.append(location)
 
         if budget:
             set_clause.append("budget=?")
@@ -508,6 +517,8 @@ class Post(Base):
         """
         return self._execute_sql(sql, [user_id])
 
+
+    
     '''
     filter = {
         "limit":5,
@@ -519,6 +530,7 @@ class Post(Base):
         }
     }
     '''
+    # reconstruct the whole fucking function :/
     def search_posts(self, limit: int = 5, offset: int = 0,
                     tags: list = None, key_words: list = None, 
                     location: str = None, dist: int = None):
@@ -572,10 +584,8 @@ class Post(Base):
 
 class Message(Base):
     def __init__(self, db_path, debug = False):
-        super().__init__(db_path, debug)
-        self.name = "message"
+        super().__init__("message", db_path, debug)
         self._create_table()
-        Message.tables.append(self.name)
 
     def _create_table(self):
         sql = f"""
@@ -621,11 +631,10 @@ class Message(Base):
     
 class Post_tag(Base):
     def __init__(self, db_path, debug = False):
-        super().__init__(db_path, debug)
-        self.name = "post_tag"
-        self.create_table()
+        super().__init__("post_tag", db_path, debug)
+        self._create_table()
         
-    def create_table(self):
+    def _create_table(self):
         sql = f"""
             CREATE TABLE IF NOT EXISTS {self.name} (
                 post_id INTEGER NOT NULL REFERENCES post(post_id) ON DELETE CASCADE,
@@ -651,8 +660,7 @@ class Post_tag(Base):
 
 class Tag(Base):
     def __init__(self, db_path, debug = False):
-        super().__init__(db_path, debug)
-        self.name = "tag"
+        super().__init__("tag", db_path, debug)
         self._create_table()
         for tag in DEFULT_TAGS:
             self.create_tag(tag)
@@ -687,8 +695,14 @@ class Tag(Base):
             FROM {self.name}
             WHERE tag_name = ?;
         """
-
-        return self._execute_sql(sql, (tag_name,))
+        res = self._execute_sql(sql, (tag_name,))
+        if not res[0]:
+            return res
+        
+        if not res[1]:
+            return False, "no tag selected"
+        
+        return True, res[1][0].get("tag_id")
 
 # to be continued....
 class Report(Base):
@@ -709,6 +723,8 @@ class Db_api:
         self.post = Post(db_path, debug)
         self.post_tag = Post_tag(db_path, debug)
         self.tag = Tag(db_path, debug)
+        self.message = Message(db_path, debug)
+    
 
 if __name__ == "__main__":
     Db_api(DB_PATH, DEBUG)

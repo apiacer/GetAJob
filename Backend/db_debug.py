@@ -1,200 +1,189 @@
 from db import Db_api, DB_PATH
-import random
 import os
 
 
+# ---------------------------------------------------
+# Utility: Delete old DB
+# ---------------------------------------------------
 def delete_db():
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
-def test_post(db:Db_api):
-    print("---- test all post functions")
-    print("create new post")
-    res = db.post.create_post("test_title", "test_description", 1)
-    res = db.post.create_post("test_title0", "test_description0", 1)
-    print(res)
-    print()
-    print("create post with non-exist user (test if foreign key constraint works)")
-    res = db.post.create_post("test_title", "test_description", 1000)
-    print(res)
-    print()
-    print("select post by id")
-    res = db.post.select_post(1)
-    print(res)
-    print()
-    print("select non-exist post by id")
-    res = db.post.select_post(100)
-    print(res)
-    print()
-    print("select post own by user id 1")
-    res = db.post.select_user_post(1)
-    print(res)
-    print()
-    print("select post own by non-exist user")
-    res = db.post.select_user_post(1000)
-    print(res)
-    print()
-    print("modify post")
-    res = db.post.update_post(1, "new title", "new description", "my location", "0-100")
-    print(res)
-    print()
-    print("select 10 latest post")
-    res = db.post.select_latest_n_posts()
-    print(f"data length: {len(res[1])}")
-    print(res)
-    print()
-    print(f"delete user_id=1 (test for on delete cascade)")
-    res = db.post.select_latest_n_posts(None)
-    print(f"post num before delete: {len(res[1])}")
-    res = db.user.delete_user(user_id=1)
-    print(f"delete user: {res}")
-    res = db.post.select_latest_n_posts(None)
-    print(f"post num after delete: {len(res[1])}")
+
+# ---------------------------------------------------
+# Test User Module
+# ---------------------------------------------------
+def test_user(db: Db_api):
+    print("\n==== TEST USER MODULE ====\n")
+
+    print("1. Insert small invalid username:")
+    print(db.user.create_account("1", "pass1234", "u1@mail"))
     print()
 
-def test_message(db:Db_api):
-    pass
-
-def test_post_tag(db:Db_api):
-    pass
-
-def test_tag(db:Db_api):
-    pass
-
-def test_user_report(db:Db_api):
-    pass
-
-# do we need a post report seperate from user report? 
-def test_post_report(db:Db_api):
-    pass
-
-# all test case success
-def test_user(db:Db_api):
-    # test create account
-    print("---- test create account ----")
-    print("insert invalid user:")
-    res = db.user.create_account("1", "12345678", "example@gmail.com")
-    print(res)
-    print()
-    print("insert a user:")
-    res = db.user.create_account("test_user", "test_password", "example@gmail.com")
-    print(res)
-    print()
-    print("insert duplicate user:")
-    res = db.user.create_account("test_user", "test_password", "example@gmail.com")
-    print(res)
+    print("2. Insert valid user:")
+    print(db.user.create_account("test_user", "test_password", "example@gmail.com"))
     print()
 
-    # test get/update user profile
-    print("---- test get user info ----" )
-    print("get user by user name")
-    res = db.user.get_user_info(user_name="test_user")
-    print(res)
-    print()
-    print("get user by user id")
-    res = db.user.get_user_info(user_id=res[1]["user_id"])
-    print(res)
-    print()
-    print("get user by email")
-    res = db.user.get_user_info(email="example@gmail.com")
-    print(res)
-    print()
-    print("get non-exist user by user name")
-    res = db.user.get_user_info("do_not_exist")
-    print(res)
-    print()
-    os.system("pause")
-
-
-    print("update user profile")
-    res = db.user.update_user_info("test_user", email="new@gmail.com", phone="1234567890", first_name="user_frist_name", last_name="user_last_name")
-    print(res)
-    print()
-    print("get user info after updated")
-    res = db.user.get_user_info("test_user")
-    print(res)
-    print()
-    
-    # test ban/if_banned/unban function
-    print("---- test ban/if_banned/unban function ----")
-    print("ban user")
-    res = db.user.ban_user("test_user")
-    print(res)
-    print()
-    print("check if user is banned")
-    res = db.user.get_user_info("test_user")
-    print(res)
-    print()
-    print("check all banned user")
-    res = db.user.get_all_banned_user()
-    print(res)
-    print()
-    print("unban user")
-    res = db.user.unban_user("test_user")
-    print(res)
-    print()
-    print("check if user is banned")
-    res = db.user.get_user_info("test_user")    
-    print(res)
-    print()
-    
-    # test verify/update password
-    print("---- test verify/update password ----")
-    print("verify password (if login) with wrong password")
-    res = db.user.verify_password("test_user", "test")
-    print(res)
-    print()
-    print("verify password with correct password")
-    res = db.user.verify_password("test_user", "test_password")
-    print(res)
-    print()
-    print("update password")
-    res = db.user.update_password("test_user", "new_password")
-    print(res)
-    print()
-    print("verify with old password")
-    res = db.user.verify_password("test_user", "test_password")
-    print(res)
-    print()
-    print("verify with new password")
-    res = db.user.verify_password("test_user", "new_password")
-    print(res)
+    print("3. Insert duplicate user:")
+    print(db.user.create_account("test_user", "test_password", "example@gmail.com"))
     print()
 
-    print("---- test update user name / delete user ----")
-    print("update user name")
-    res = db.user.update_user_name("new_user", "test_user")
-    print(res)
-    print()
-    print("delete user with old name")
-    res = db.user.delete_user("test_user")
-    print(res)
-    print()
-    print("delete user with new name")
-    res = db.user.delete_user("new_user")
-    print(res)
+    print("4. Get by username:")
+    print(db.user.get_user_info("test_user"))
     print()
 
-def apply_test_data(db:Db_api):
-    print("---- insert test users ----")
-    # generate test user
-    test_user = [{"user_name":f"test_user{n+1}", "email":f"test_email{n+1}", "password":f"test_password{n+1}"} for n in range(10)]
-    for i in test_user:
-        res = db.user.create_account(i["user_name"], i["password"], i["email"])
-        print(f"add {i['user_name']}: {res}")
+    print("5. Update profile:")
+    print(db.user.update_user_info(
+        "test_user",
+        email="new@mail",
+        first_name="John",
+        last_name="Doe",
+        phone="12345"
+    ))
+    print()
 
-    # # generate test posts
-    # test_post = [{"title":f"test_title{n+1}", "description":f"test_description{n+1}", "owner_id":random.randint(1, 10)} for n in range(10)]
-    # for i in test_post:
-    #     res = db.create_post(i["title"], i["description"], i["owner_id"])
-    #     print(f"add new post: {res}")
+    print("8. Delete user:")
+    print(db.user.delete_user("test_user"))
+    print()
 
-    print("---- finish adding test data ----\n")
 
+# ---------------------------------------------------
+# Test Post Module
+# ---------------------------------------------------
+def test_post(db: Db_api):
+    print("\n==== TEST POST MODULE ====\n")
+
+    print("1. Create posts owned by users 1,2,3:")
+    p1 = db.post.create_post("T1", "D1", 1)
+    p2 = db.post.create_post("T2", "D2", 2)
+    p3 = db.post.create_post("T3", "D3", 3)
+    print(p1, p2, p3)
+    print()
+
+    print("2. Create invalid post (FK fail):")
+    print(db.post.create_post("Bad", "Bad", 9999))
+    print()
+
+    print("3. Select post by ID:")
+    print(db.post.select_post(1))
+    print()
+
+    print("4. Update post:")
+    print(db.post.update_post(1, "Updated", "Updated Desc", "LA", "100-200"))
+    print()
+
+
+
+# ---------------------------------------------------
+# Test Tag Module
+# ---------------------------------------------------
+def test_tag(db: Db_api):
+    print("\n==== TEST TAG MODULE ====\n")
+
+    print("1. Create tags:")
+    print(db.tag.create_tag("food"))
+    print(db.tag.create_tag("sport"))
+    print(db.tag.create_tag("music"))
+    print()
+
+    print("2. Duplicate tag:")
+    print(db.tag.create_tag("food"))
+    print()
+
+    print("3. Fetch tag ID:")
+    print("sport id:", db.tag.get_tag_id("sport"))
+    print()
+
+    print("4. Delete tag:")
+    print(db.tag.delete_tag("music"))
+    print()
+
+
+# ---------------------------------------------------
+# Test Post-Tag Module
+# ---------------------------------------------------
+def test_post_tag(db: Db_api):
+    print("\n==== TEST POST_TAG MODULE ====\n")
+
+    # ensure data exists
+    db.post.create_post("Food post", "desc", 1)
+    db.post.create_post("Sport post", "desc", 2)
+
+    t_food = db.tag.get_tag_id("food")[1]
+    t_sport = db.tag.get_tag_id("sport")[1]
+
+    print("1. Add tags to posts:")
+    print(db.post_tag.add_tag2post(1, t_food))
+    print(db.post_tag.add_tag2post(1, t_sport))
+    print(db.post_tag.add_tag2post(2, t_sport))
+    print()
+
+    print("2. Add duplicate relation (ignored):")
+    print(db.post_tag.add_tag2post(1, t_food))
+    print()
+
+    print("3. Remove tag:")
+    print(db.post_tag.delete_post_tag(1, t_food))
+    print()
+
+    print("4. Remove non-existing relation:")
+    print(db.post_tag.delete_post_tag(1, 99999))
+    print()
+
+
+# ---------------------------------------------------
+# Test Message Module
+# ---------------------------------------------------
+def test_message(db: Db_api):
+    print("\n==== TEST MESSAGE MODULE ====\n")
+
+    print("1. Send valid messages:")
+    print(db.message.send_message(2, 3, "Hello from 2 to 3"))
+    print(db.message.send_message(3, 2, "Reply from 3"))
+    print(db.message.send_message(2, 3, "Another one"))
+    print()
+
+    print("2. Invalid sender/receiver (FK fail):")
+    print(db.message.send_message(999, 3, "Bad sender"))
+    print(db.message.send_message(2, 999, "Bad receiver"))
+    print()
+
+    print("3. List conversation (2 ↔ 3):")
+    print(db.message.get_room(2, 3))
+    print()
+
+    print("4. Mark messages read (sender 3 → receiver 2):")
+    print(db.message.read(3, 2))
+    print()
+
+    print("5. Check messages after read:")
+    print(db.message.get_room(2, 3))
+    print()
+
+
+# ---------------------------------------------------
+# Test data seeding
+# ---------------------------------------------------
+def seed_users(db:Db_api):
+    print("---- inserting 3 users ----")
+    for i in range(1, 4):
+        db.user.create_account(f"user{i}", f"pass{i}", f"user{i}@mail")
+    print("---- done ----\n")
+
+
+# ---------------------------------------------------
+# Main Runner
+# ---------------------------------------------------
 if __name__ == "__main__":
     delete_db()
-    db = Db_api()
-    apply_test_data(db)
+    db = Db_api(debug=False)
+
+    seed_users(db)
+
     test_user(db)
-    # test_post(db)
-    # db.terminal()
+    test_post(db)
+    test_tag(db)
+    test_post_tag(db)
+    test_message(db)
+
+    print("\n==== ALL TESTS COMPLETE ====\n")
