@@ -129,6 +129,7 @@ class User(Base):
         """
         self._execute_sql(table)
 
+    # if need rating
     def _trigger_update_rating(self)->None:
         pass
           
@@ -411,7 +412,6 @@ class Post(Base):
         self.name="post"
         self._create_table()
         self._trigger_update_modify_time()
-        self._ensure_tag_tables()
 
     def _create_table(self):
         sql = f"""
@@ -428,7 +428,7 @@ class Post(Base):
         """
 
         return self._execute_sql(sql)
-    
+
     def _trigger_update_modify_time(self):
         sql = f"""
             CREATE TRIGGER IF NOT EXISTS update_post_modify_time
@@ -443,23 +443,6 @@ class Post(Base):
         """
 
         return self._execute_sql(sql)
-    
-    def _ensure_tag_tables(self):
-        sql1 = """
-            CREATE TABLE IF NOT EXISTS tags (
-                tag_id INTEGER PRIMARY KEY,
-                tag_name TEXT UNIQUE NOT NULL
-            );
-        """
-        self._execute_sql(sql1)
-        sql2 = """
-            CREATE TABLE IF NOT EXISTS post_tag (
-                post_id INTEGER NOT NULL REFERENCES post(post_id) ON DELETE CASCADE,
-                tag_id INTEGER NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
-                PRIMARY KEY (post_id, tag_id)
-            );
-        """
-        self._execute_sql(sql2)
     
     def set_post_tags(self, post_id:int, tags:list)->tuple[bool, str]:
         # normalize input list
@@ -600,6 +583,133 @@ class Post(Base):
 
         return self._execute_sql(sql, params)
 
+class Message(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__(db_path, debug)
+        self.name = "message"
+        self._create_table()
+
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                message_id INTEGER PRIMARY KEY,
+                sender_id INTEGER NOT NULL REFERENCES user(user_id),
+                receiver_id INTEGER NOT NULL REFERENCES user(user_id),
+                if_read BOOLEAN DEFAULT 0,
+                message TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+        return self._execute_sql(sql)
+
+    def send_message(self, from_user_id:int, to_user_id:int, message:str):
+        sql = """
+            INSERT INTO message (sender_id, receiver_id, message)
+            VALUES (?, ?, ?);
+        """
+        return self._execute_sql(sql, (from_user_id, to_user_id, message))
+
+    def get_room(self, user_id1:int, user_id2:int):
+        sql = f"""
+            SELECT *
+            FROM {self.name}
+            WHERE 
+                (sender_id = ? AND receiver_id = ?)
+                OR
+                (sender_id = ? AND receiver_id = ?)
+            ORDER BY timestamp ASC;
+        """
+        return self._execute_sql(sql, (user_id1, user_id2, user_id2, user_id1))
+
+    def read(self, sender_id:int, receiver_id:int):
+        sql = f"""
+            UPDATE {self.name}
+            SET if_read = 1
+            WHERE sender_id = ?
+            AND receiver_id = ?
+            AND if_read = 0;
+        """
+        return self._execute_sql(sql, (sender_id, receiver_id))
+    
+class Post_tag(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__(db_path, debug)
+        self.name = "post_tag"
+        self.create_table()
+        
+    def create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                post_id INTEGER NOT NULL REFERENCES post(post_id) ON DELETE CASCADE,
+                tag_id  INTEGER NOT NULL REFERENCES tag(tag_id) ON DELETE CASCADE,
+                PRIMARY KEY (post_id, tag_id)
+            );
+        """
+        return self._execute_sql(sql)
+
+    def add_tag2post(self, post_id, tag_id):
+        return self._sql_insert({
+            "post_id":post_id,
+            "tag_id":tag_id
+        })
+
+
+    def delete_post_tag(self, post_id, tag_id):
+        sql = f"""
+            DELETE FROM {self.name}
+            WHERE post_id = ? AND tag_id = ?;
+        """
+        return self._execute_sql(sql, (post_id, tag_id))
+
+class Tag(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__(db_path, debug)
+        self.name = "tag"
+        self._create_table()
+        for tag in DEFULT_TAGS:
+            self.create_tag(tag)
+
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                tag_id   INTEGER PRIMARY KEY,
+                tag_name TEXT UNIQUE NOT NULL
+            );
+        """
+
+        self._execute_sql(sql)
+
+    def create_tag(self, tag_name:str):
+        sql = f"""
+            INSERT OR IGNORE INTO {self.name} (tag_name)
+            VALUES (?);
+        """
+        return self._execute_sql(sql, (tag_name,))
+
+    def delete_tag(self, tag_name:str):
+        sql = f"""
+            DELETE FROM {self.name}
+            WHERE tag_name = ?;
+        """
+        return self._execute_sql(sql, (tag_name,))
+
+    def get_tag_id(self, tag_name:str):
+        sql = f"""
+            SELECT tag_id
+            FROM {self.name}
+            WHERE tag_name = ?;
+        """
+
+        return self._execute_sql(sql, (tag_name,))
+
+# to be continued....
+class Report(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__(db_path, debug)
+
+class User_rating(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__(db_path, debug)
 
 class Db_api:
     def __init__(self, db_path:str=None, debug:bool=True):
@@ -608,6 +718,8 @@ class Db_api:
 
         self.user = User(db_path, debug)
         self.post = Post(db_path, debug)
+        self.post_tag = Post_tag(db_path, debug)
+        self.tag = Tag(db_path, debug)
 
 if __name__ == "__main__":
     Db_api(DB_PATH, DEBUG)

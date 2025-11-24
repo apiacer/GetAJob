@@ -3,3 +3,4 @@ black==23.0.0
 flake8==6.0.0
 python-dotenv==1.0.0
 bcrypt==5.0.0
+flask_mail==0.10.0
