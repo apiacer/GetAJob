@@ -455,10 +455,6 @@ class Post(Base):
 
         return self._execute_sql(sql)
     
-    # ---- need to implement logic with geopy ----
-    def _trigger_insert_cords(self):
-        pass
-    
     def _trigger_update_modify_time(self):
         sql = f"""
             CREATE TRIGGER IF NOT EXISTS update_post_modify_time
@@ -479,7 +475,16 @@ class Post(Base):
         return self._execute_sql("SELECT MAX(post_id) AS id FROM post")
     
     def create_post(self, title:str, description:str, owner_id:int, location:str=None, budget:str=None):
-        return self._sql_insert({"title":title, "description":description, "owner_id":owner_id, "location":location, "budget":budget})
+        latitude = None
+        longitude = None
+
+        if location:
+            res = self.addr2cord(location)
+            if not res[0]:
+                return False, "invalid location"
+            latitude, longitude = res[1]
+
+        return self._sql_insert({"title":title, "description":description, "owner_id":owner_id, "location":location, "budget":budget, "latitude":latitude, "longitude":longitude})
     
     def update_post(self, post_id:int, title:str=None, description:str=None, location:str=None, budget:str=None):
         set_clause = []
@@ -495,6 +500,11 @@ class Post(Base):
 
         if location:
             set_clause.append("location=?")
+            res = self.addr2cord(location)
+            if not res[0]:
+                return False, "invalid location"
+            latitude, longitude = res[1]
+            
             param.append(location)
 
         if budget:

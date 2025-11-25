@@ -170,7 +170,6 @@ def confirm_email(token):
     flash('Your email has been confirmed! You can now log in.', 'success')
     return redirect(url_for('login'))
 
-
 # when sign up check if username already taken
 @app.route('/check_username')
 def check_username():
@@ -195,9 +194,8 @@ def check_location():
 
 @app.route('/jobs')
 def jobs_list(): ##### CHANGED jobs to match new template structure
-    ##location = "1151 57th St"
 
-    # --- Query parameters ---
+    # Query parameters
     q = request.args.get('q', '').strip()
     location = request.args.get('location', '').strip()
     raw_tags = request.args.get('tags', '').strip()
@@ -232,8 +230,9 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
     # Remove the extra record
     posts = res[:ITEMS_PER_PAGE]
 
+    # ---- need to rewire css onto new template
     return render_template(
-        'jobs/job_list.html', ### Changed template path
+        'jobs/job_list.html', 
         jobs=posts,
         title='Jobs',
         page_num=page_num,
