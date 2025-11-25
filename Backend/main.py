@@ -7,6 +7,7 @@ from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from dotenv import load_dotenv
 
+
 def delete_db():
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
@@ -17,11 +18,11 @@ load_dotenv()
 
 # test data
 JOB_DATA = [
-    {"title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS.", "owner_id": "2", "location": "1300 65th St"},
-    {"title": "Backend Developer", "description": "APIs with Python + Flask.", "owner_id": "2", "location": "1300 65th St"},
-    {"title": "Data Analyst", "description": "SQL, charts, and insights.", "owner_id": "3", "location": "1305 64th St"},
-    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
-    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave"},
+    {"title": "Frontend Developer", "description": "Build UI with HTML/CSS/JS.", "owner_id": "2", "location": "1300 65th St, CA"},
+    {"title": "Backend Developer", "description": "APIs with Python + Flask.", "owner_id": "2", "location": "1300 65th St, CA"},
+    {"title": "Data Analyst", "description": "SQL, charts, and insights.", "owner_id": "3", "location": "1305 64th St, CA"},
+    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave, CA"},
+    {"title": "UX Designer", "description": "Design flows and prototypes.", "owner_id": "1", "location": "6655 Elvas Ave, CA"},
 ]
 
 USER_DATA = [
@@ -70,7 +71,6 @@ def add_data():
 
 
 add_data() 
-
 
 @app.route('/')
 def home():
@@ -179,11 +179,18 @@ def check_username():
     return jsonify({"exists": res[0]})
 
 # when sign up chek if email already taken
-# ---- need to wire it to the front end sign up page
+# ---- need to wire it to the front end sign up page ----
 @app.route('/check_email')
 def check_email():
     email = request.args.get('email')
     res = db.user.get_user_info(email=email)
+    return jsonify({"exists": res[0]})
+
+# ---- need to wire to front end post new jobs ----
+@app.route('/check_location')
+def check_location():
+    location = request.args.get('location')
+    res = db.post.addr2cord(location)
     return jsonify({"exists": res[0]})
 
 @app.route('/jobs')
@@ -240,7 +247,7 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
 # tf is this???
 def submit_form():
     print("in submit_form") # debug
-    
+
     # Get the user input from the form
     user_input = request.form['username']
     

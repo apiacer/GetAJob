@@ -54,7 +54,7 @@
           <small id="pw-strength"></small>
         </div>
 
-        <button type="submit" class="signup-btn">Sign Up</button>
+        <button id="submit" type="submit" class="signup-btn" disabled>Sign Up</button>
 
         <div class="login-link">
           <a href="/login">Already have an account? Log in</a>
@@ -63,41 +63,83 @@
     </div>
 
     <script>
-      // ===== Email Check =====
+
       const emailField = document.getElementById('email');
       const emailStatus = document.getElementById('email-status');
-      emailField.addEventListener('input', () => {
+
+      const pwField = document.getElementById('password');
+      const pwStatus = document.getElementById('pw-strength');
+      
+      const nameInputs = [document.getElementById('fname'), document.getElementById('lname')];
+
+      const usernameField = document.getElementById('username');
+      const userStatus = document.getElementById('user-status');
+
+      const submitBtn = document.getElementById('submit');
+
+      // ===== update button =====
+      async function update_button() {
+        console.log("SCRIPT LOADED");
+        if (emailStatus.style.color == "green" && 
+            pwStatus.style.color == "green" && 
+            userStatus.style.color == "green"){
+            submitBtn.disabled = false;
+          }
+        else{
+          submitBtn.disabled = true;
+        }
+      }
+
+      // ===== Email Check =====
+      emailField.addEventListener('input', async () => {
         const valid = /^[^@]+@[^@]+\.[^@]+$/.test(emailField.value);
         emailStatus.textContent = valid ? "Valid email format" : "Invalid email format";
         emailStatus.style.color = valid ? "green" : "red";
+        
+        // check exist after valid
+        if (valid){
+          const value = emailField.value.trim();
+          try{
+            const response = await fetch(`/check_email?email=${encodeURIComponent(value)}`);
+            const data = await response.json();
+            console.log('Response:', data);
+
+            if (data.exists) {
+              emailStatus.textContent = "Oops! This email is already registered. Did you mean to log in?"
+              emailStatus.style.color = "red"
+            }
+          } catch (err) {
+            console.error(err);
+            emailStatus.textContent = "Error checking email";
+            emailStatus.style.color = "orange"
+          }
+        }
+        await update_button();
       });
 
+
       // ===== Password Strength =====
-      const pwField = document.getElementById('password');
-      const pwStatus = document.getElementById('pw-strength');
       pwField.addEventListener('input', () => {
         const value = pwField.value;
         // at least 1 lowercase, 1 uppercase, 1 digit, 8+ chars
-        const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(value);
+        const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_]).{8,}$/.test(value);
         pwStatus.textContent = strong
           ? "Strong password"
           : "⚠️ Weak (Use 8+ characters with 1 uppercase, 1 number, and 1 special character.)";
         pwStatus.style.color = strong ? "green" : "orange";
+        update_button();
       });
 
-
+      // add name condition and status
       // ===== Name Fields =====
-      const nameInputs = [document.getElementById('fname'), document.getElementById('lname')];
       nameInputs.forEach(field => {
         field.addEventListener('input', () => {
           field.value = field.value.replace(/[^a-zA-Z]/g, '');
         });
+        update_button()
       });
 
       // ===== Username validation =====
-      const usernameField = document.getElementById('username');
-      const userStatus = document.getElementById('user-status');
-
       usernameField.addEventListener('input', async () => {
         const value = usernameField.value.trim(); // remove spaces first
         console.log('Username length:', value.length);
@@ -125,7 +167,10 @@
           userStatus.textContent = "Error checking username";
           userStatus.style.color = "orange";
         }
+        update_button();
       });
+
+
     </script>
   </body>
 </html>

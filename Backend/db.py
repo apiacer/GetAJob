@@ -3,6 +3,7 @@ import bcrypt
 import threading
 import re
 from abc import ABC, abstractmethod
+from geopy.geocoders import Nominatim
 
 DEBUG = True
 DB_PATH = "test.db"
@@ -424,6 +425,18 @@ class Post(Base):
         self._create_table()
         self._trigger_update_modify_time()
 
+    # utils
+    def addr2cord(addr:str)->tuple[bool, tuple]:
+        geolocator = Nominatim(user_agent="getajob")
+        try:
+            location = geolocator.geocode("6655 Elvas Ave, CA")
+
+            return True, (location.latitude, location.longitude)
+        
+        except:
+            return False, tuple()
+    
+    # sql
     def _create_table(self):
         sql = f"""
             CREATE TABLE IF NOT EXISTS {self.name} (
@@ -714,7 +727,7 @@ class Counter(Base):
         self._add_default_row()
         self._trigger_update_post_cnt()
         self._trigger_update_user_cnt()
-        
+
     def _create_table(self):
         sql = f"""
             CREATE TABLE IF NOT EXISTS counter (
@@ -725,20 +738,72 @@ class Counter(Base):
         return self._execute_sql(sql)
     
     def _add_default_row(self):
-        res = self._sql_insert({"name":"user"})
-        res = self._sql_insert({"name":"post"})
+        self._sql_insert({"name":"user"})
+
+        self._sql_insert({"name":"post"})
 
     def _trigger_update_user_cnt(self):
-        pass
+        sql = f"""
+            CREATE TRIGGER IF NOT EXISTS increment_user_counter
+            AFTER INSERT ON user
+            BEGIN
+                UPDATE counter
+                SET num = num + 1
+                WHERE name = 'user';
+            END;
+        """
+        self._execute_sql(sql)
+
+        sql = """
+            CREATE TRIGGER IF NOT EXISTS decrement_user_counter
+            AFTER DELETE ON user
+            BEGIN
+                UPDATE counter
+                SET num = num - 1
+                WHERE name = 'user';
+            END;
+        """
+        self._execute_sql(sql)
+
 
     def _trigger_update_post_cnt(self):
-        pass
+        sql = """
+            CREATE TRIGGER IF NOT EXISTS increment_post_counter
+            AFTER INSERT ON post
+            BEGIN
+                UPDATE counter
+                SET num = num + 1
+                WHERE name = 'post';
+            END;
+        """
+        self._execute_sql(sql)
+
+        sql = """
+            CREATE TRIGGER IF NOT EXISTS decrement_post_counter
+            AFTER DELETE ON post
+            BEGIN
+                UPDATE counter
+                SET num = num - 1
+                WHERE name = 'post';
+            END;
+        """
+        self._execute_sql(sql)
     
     def get_user_count(self):
-        pass
+        sql = "SELECT num FROM counter WHERE name='user'"
+        res = self._execute_sql(sql)
+        if not res[0]:
+            return res
+        
+        return True, res[1][0].get("num")
 
     def get_post_count(self):
-        pass
+        sql = "SELECT num FROM counter WHERE name='post'"
+        res = self._execute_sql(sql)
+        if not res[0]:
+            return res
+        return True, res[1][0].get("num")
+    
 
 # to be continued....
 class Report(Base):
@@ -760,7 +825,8 @@ class Db_api:
         self.post_tag = Post_tag(db_path, debug)
         self.tag = Tag(db_path, debug)
         self.message = Message(db_path, debug)
-    
+        self.counter = Counter(db_path, debug)
+
 # call terminal to manual check databse for debug 
 def terminal():
     print("in terminal")
