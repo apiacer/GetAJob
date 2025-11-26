@@ -60,7 +60,6 @@ s = URLSafeTimedSerializer(app.secret_key)
 
 # add to database
 def add_data():
-    
     for user in USER_DATA:
         res = db.user.create_account(user["user_name"], user["password"], user["email"])
         print(res)
@@ -193,18 +192,21 @@ def check_location():
     return jsonify({"exists": res[0]})
 
 @app.route('/jobs')
-def jobs_list(): ##### CHANGED jobs to match new template structure
+def jobs_list():
 
     # Query parameters
     q = request.args.get('q', '').strip()
     location = request.args.get('location', '').strip()
-    raw_tags = request.args.get('tags', '').strip()
+
+    # Bubble tag input → use getlist()
+    tags = request.args.getlist('tags')   # << FIXED
+
+    # If no tags selected, treat as None
+    tags = tags if tags else None
+
     page_num = int(request.args.get('page', 1))
 
-    # Parse multi-tag input: "crypto,binance,ai"
-    tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else None
-
-    # Parse keywords: split user query into multiple words
+    # Parse keywords for DB search
     keywords = [w for w in q.split() if w] if q else None
 
     # Pagination settings
@@ -213,9 +215,9 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
 
     # --- Query database ---
     ok, res = db.post.search_posts(
-        limit=ITEMS_PER_PAGE + 1,  # fetch 1 extra to detect "next page"
+        limit=ITEMS_PER_PAGE + 1, 
         offset=offset,
-        tags=tags,
+        tags=tags,            # now correctly a list from checkboxes
         key_words=keywords,
         location=location
     )
@@ -227,20 +229,34 @@ def jobs_list(): ##### CHANGED jobs to match new template structure
     hide_prev = (page_num == 1)
     hide_next = len(res) <= ITEMS_PER_PAGE
 
-    # Remove the extra record
     posts = res[:ITEMS_PER_PAGE]
 
-    # ---- need to rewire css onto new template
+    # Fetch all tags for bubble UI
+    res = db.tag.get_all_tag()
+    if not res[0]:
+        all_tags = []
+    else:
+        all_tags = [x.get("tag_name") for x in res[1]]
+    print(all_tags)
+    all_tags.pop()
+
     return render_template(
-        'jobs/job_list.html', 
+        'job_list_with_map.html',
         jobs=posts,
         title='Jobs',
         page_num=page_num,
         hide_prev=hide_prev,
         hide_next=hide_next,
+
+        # return raw inputs
         q=q,
-        tags=raw_tags,
-        location=location
+        location=location,
+
+        # return selected tags *as a list*
+        tags=tags,
+
+        # used by template to build bubbles
+        all_tags=all_tags
     )
 
 # tf is this???
@@ -278,6 +294,7 @@ def job_view(post_id):
     post = rows[0]
 
     # fetch tags and derive availability flags
+    db.post_tag
     ok_t, tag_list = db.post.get_post_tags(post_id)
     tag_list = tag_list if ok_t else []
     post["tags"] = [t for t in tag_list if not t.startswith("avail:")]

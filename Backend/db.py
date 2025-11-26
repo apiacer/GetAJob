@@ -4,6 +4,7 @@ import threading
 import re
 from abc import ABC, abstractmethod
 from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
 
 DEBUG = True
 DB_PATH = "test.db"
@@ -426,15 +427,15 @@ class Post(Base):
         self._trigger_update_modify_time()
 
     # utils
-    def addr2cord(addr:str)->tuple[bool, tuple]:
+    def addr2cord(self, addr:str)->tuple[bool, tuple|str]:
         geolocator = Nominatim(user_agent="getajob")
         try:
-            location = geolocator.geocode("6655 Elvas Ave, CA")
+            location = geolocator.geocode(addr)
 
             return True, (location.latitude, location.longitude)
         
         except:
-            return False, tuple()
+            return False, "invalid location"
     
     # sql
     def _create_table(self):
@@ -500,13 +501,17 @@ class Post(Base):
 
         if location:
             set_clause.append("location=?")
+            param.append(location)
+
             res = self.addr2cord(location)
             if not res[0]:
                 return False, "invalid location"
             latitude, longitude = res[1]
+            set_clause.append("latitude=?")
+            param.append(latitude)
+            set_clause.append("longitude=?")
+            param.append(longitude)
             
-            param.append(location)
-
         if budget:
             set_clause.append("budget=?")
             param.append(budget)
@@ -550,12 +555,29 @@ class Post(Base):
         "limit":5,
         "offset":0,
         "key_words":None,
+        "tags":None
         "geo"{
             "loc": None,
             "dist": None
         }
     }
     '''
+    def search_post(self, filter:dict):
+        tags = filter.get("tags") or []
+        key_words = filter.get("key_words") or []
+
+        if filter.get("geo"):
+            res = self.addr2cord(filter["geo"]["loc"])
+            if not res[0]:
+                return res
+
+        sql = f"""
+            SELECT p.*
+            FROM {self.name} p
+            WHERE 1=1
+        """
+
+
     # reconstruct the whole fucking function :/
     def search_posts(self, limit: int = 5, offset: int = 0,
                     tags: list = None, key_words: list = None, 
@@ -684,6 +706,9 @@ class Post_tag(Base):
         """
         return self._execute_sql(sql, (post_id, tag_id))
 
+    def get_post_tag(self, ):
+        pass
+
 class Tag(Base):
     def __init__(self, db_path, debug = False):
         super().__init__("tag", db_path, debug)
@@ -730,6 +755,10 @@ class Tag(Base):
         
         return True, res[1][0].get("tag_id")
 
+    def get_all_tag(self):
+        sql = f"""SELECT * FROM {self.name}"""
+        return self._execute_sql(sql)
+    
 class Counter(Base):
     def __init__(self, db_path, debug = False):
         super().__init__("counter", db_path, debug)
