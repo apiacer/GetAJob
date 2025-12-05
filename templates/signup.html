@@ -1,176 +1,47 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign Up</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/signup.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
-  </head>
+{% extends "layout.html" %}
 
-  <body>
-    <a href="/" class="home-link">← Back Home</a>
+{% block title %}Sign up — GetAJob{% endblock %}
 
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul class="flashes">
-          {% for category, message in messages %}
-            <li class="{{ category }}">{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
+{% block content %}
+<div class="card" style="max-width:520px; margin:18px auto; padding:18px;">
+  <h2 style="margin-top:0; color:var(--primary);">Create an account</h2>
+  <p class="meta" style="color:#666; margin-top:6px;">Join GetAJob — find and apply for jobs tailored to you.</p>
 
-    <div class="signup-card">
-      <h2>Sign Up</h2>
+  <form method="post" action="{{ url_for('signup') }}" style="margin-top:12px;" autocomplete="off">
+    <label for="email" style="font-weight:600; margin-top:12px;">Email</label>
+    <input id="email" name="email" type="email" required value="{{ email|default('') }}" class="input">
 
-      <form action="/signup" method="post" id="signup-form">
-        <div class="form-group">
-          <label>First Name</label>
-          <input type="text" id="fname" name="fname" required />
-        </div>
+    <label for="username" style="font-weight:600; margin-top:12px;">Username</label>
+    <input id="username" name="username" type="text" required value="{{ username|default('') }}" class="input">
 
-        <div class="form-group">
-          <label>Last Name</label>
-          <input type="text" id="lname" name="lname" required />
-        </div>
+    <label for="password" style="font-weight:600; margin-top:12px;">Password</label>
+    <input id="password" name="password" type="password" required class="input">
 
-        <div class="form-group">
-          <label>Username</label>
-          <input type="text" id="username" name="username" required />
-          <small id="user-status"></small>
-        </div>
-
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="email" name="email" required />
-          <small id="email-status"></small>
-        </div>
-
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="password" name="password" required />
-          <small id="pw-strength"></small>
-        </div>
-
-        <button id="submit" type="submit" class="signup-btn" disabled>Sign Up</button>
-
-        <div class="login-link">
-          <a href="/login">Already have an account? Log in</a>
-        </div>
-      </form>
+    <div style="display:flex; gap:12px;">
+      <div style="flex:1;">
+        <label for="first_name" style="font-weight:600; margin-top:12px;">First name (optional)</label>
+        <input id="first_name" name="first_name" type="text" value="{{ first_name|default('') }}" class="input">
+      </div>
+      <div style="flex:1;">
+        <label for="last_name" style="font-weight:600; margin-top:12px;">Last name (optional)</label>
+        <input id="last_name" name="last_name" type="text" value="{{ last_name|default('') }}" class="input">
+      </div>
     </div>
 
-    <script>
+    <label for="role" style="font-weight:600; margin-top:12px;">Account type</label>
+    <select id="role" name="role" required class="input">
+      <option value="contractor" {% if role == 'contractor' %}selected{% endif %}>Contractor</option>
+      <option value="client" {% if role == 'client' %}selected{% endif %}>Client</option>
+    </select>
 
-      const emailField = document.getElementById('email');
-      const emailStatus = document.getElementById('email-status');
+    <div style="display:flex; gap:8px; align-items:center; margin-top:16px;">
+      <button class="btn btn-primary" type="submit">Sign up</button>
+      <a class="btn btn-linkish" href="{{ url_for('signin') }}">Already have an account? Sign in</a>
+    </div>
 
-      const pwField = document.getElementById('password');
-      const pwStatus = document.getElementById('pw-strength');
-      
-      const nameInputs = [document.getElementById('fname'), document.getElementById('lname')];
-
-      const usernameField = document.getElementById('username');
-      const userStatus = document.getElementById('user-status');
-
-      const submitBtn = document.getElementById('submit');
-
-      // ===== update button =====
-      async function update_button() {
-        console.log("SCRIPT LOADED");
-        if (emailStatus.style.color == "green" && 
-            pwStatus.style.color == "green" && 
-            userStatus.style.color == "green"){
-            submitBtn.disabled = false;
-          }
-        else{
-          submitBtn.disabled = true;
-        }
-      }
-
-      // ===== Email Check =====
-      emailField.addEventListener('input', async () => {
-        const valid = /^[^@]+@[^@]+\.[^@]+$/.test(emailField.value);
-        emailStatus.textContent = valid ? "Valid email format" : "Invalid email format";
-        emailStatus.style.color = valid ? "green" : "red";
-        
-        // check exist after valid
-        if (valid){
-          const value = emailField.value.trim();
-          try{
-            const response = await fetch(`/check_email?email=${encodeURIComponent(value)}`);
-            const data = await response.json();
-            console.log('Response:', data);
-
-            if (data.exists) {
-              emailStatus.textContent = "Oops! This email is already registered. Did you mean to log in?"
-              emailStatus.style.color = "red"
-            }
-          } catch (err) {
-            console.error(err);
-            emailStatus.textContent = "Error checking email";
-            emailStatus.style.color = "orange"
-          }
-        }
-        await update_button();
-      });
-
-
-      // ===== Password Strength =====
-      pwField.addEventListener('input', () => {
-        const value = pwField.value;
-        // at least 1 lowercase, 1 uppercase, 1 digit, 8+ chars
-        const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_]).{8,}$/.test(value);
-        pwStatus.textContent = strong
-          ? "Strong password"
-          : "⚠️ Weak (Use 8+ characters with 1 uppercase, 1 number, and 1 special character.)";
-        pwStatus.style.color = strong ? "green" : "orange";
-        update_button();
-      });
-
-      // add name condition and status
-      // ===== Name Fields =====
-      nameInputs.forEach(field => {
-        field.addEventListener('input', () => {
-          field.value = field.value.replace(/[^a-zA-Z]/g, '');
-        });
-        update_button()
-      });
-
-      // ===== Username validation =====
-      usernameField.addEventListener('input', async () => {
-        const value = usernameField.value.trim(); // remove spaces first
-        console.log('Username length:', value.length);
-        if (value.length < 4) {
-          userStatus.textContent = "Username must be at least 4 characters";
-          userStatus.style.color = "red";
-          return;
-        }
-
-        // Now check backend for uniqueness
-        try {
-          const response = await fetch(`/check_username?username=${encodeURIComponent(value)}`);
-          const data = await response.json(); 
-          console.log('Response:', data);      
-
-          if (data.exists) {
-            userStatus.textContent = "Username already taken";
-            userStatus.style.color = "red";
-          } else {
-            userStatus.textContent = "Username available";
-            userStatus.style.color = "green";
-          }
-        } catch (err) {
-          console.error(err);
-          userStatus.textContent = "Error checking username";
-          userStatus.style.color = "orange";
-        }
-        update_button();
-      });
-
-
-    </script>
-  </body>
-</html>
+    <div class="help" style="margin-top:12px; color:var(--muted); font-size:0.95rem;">
+      Passwords must be at least 8 characters and include letters and numbers.
+    </div>
+  </form>
+</div>
+{% endblock %}

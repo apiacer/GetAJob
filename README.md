@@ -1,68 +1,37 @@
-# GetAJob
-Webpage for CSC 131 section 4 group 5
+```markdown
+# Jobsite (Flask + Server-rendered HTML)
 
-### Description
-Our job platform is a web-based system that connects contractors and clients to small or large job opportunities. Our purpose is to provide an easy to use, streamlined system where someone can list / find jobs no matter the size.
+This version replaces the Node/React scaffold with a simple Flask application that serves HTML templates and uses SQLite for account storage. It includes signup, signin, session-based auth, role support (candidate / employer), and a protected profile page.
 
-### Database field
- - __User__:
-    | Fields |
-    | ------ |
-    | user_id |
-    | user_name |
-    | email |
-    | password |
-    |age |
-    | address |
-    | first_name |
-    | last_name |
-    | location |
-    | profile |
-    | pfp |
-    | is_admin |
-    | is_banned |
-    | create_time |
-    | modify_time |
+Requirements
+- Python 3.8+
+- pip
 
- - __Post__
-    | Fields |
-    | ------ |
-    | post_id |
-    | title |
-    | description |
-    | owner_id |
-    | location |
-    | budget |
-    | create_time |
-    | modify_time |
+Install
+1. Create a virtual environment (recommended)
+   - python -m venv venv
+   - source venv/bin/activate  # on Windows: venv\Scripts\activate
 
-### Database api
- - __User__:    
-    | Function Name | Input | Return Value | Description |
-    | ------------- | ----- | ------------ | ----------- |
-    | create_account | username, password, email | success | Insert user into database |
-    | get_user_info | username or user id or email | email, phone... | get all user data except password with either username, user id or email|
-    | verify_password | username, password | True/False | check if password match the user's password, use for logging in account |
-    | update_user_name | new username, old username | success | change username from old to new |
-    | update_password | username, new password | success | change user password |
-    | update_user_profile | username, email, phone... | success | update a user's profile(pass in only the one that needs to be updated) |
-    | ban_user | username | success | ban a user (only admin has permision to ban) |
-    | unban_user | username | success | unban a user (only admin has permision to unban) |
-    | delete_user | username or user id or email | success | delete your account |
+2. Install dependencies
+   - pip install -r requirements.txt
 
-- __Post__:
-    | Function Name | Input | Return Value | Description |
-    |---------------|-------|--------------|-------------|
-    | create_post | title, description, owner_id | success | create post |
-    | delete_post | post_id | success | delete post with post id |
-    | update_post | post_id, fields that needs to be updated | success | update post with id |
-    | select_post | post_id | all fields of the selected post | select post with post id |
-    | select_user_post | user_id | all posts created by the user | select posts created by a user |
-    | select_latest_n_posts | limit, offset| latest n posts |  select the last n post that's modified |
+Run
+- python app.py
+- By default the app runs on http://127.0.0.1:5000
 
-### Contact Information
-- anthonybelcher@csus.edu
-- mboyle@csus.edu
-- jaredshicks@csus.edu
-- dvillasenor2@csus.edu
-- chenwang@csus.edu
+Environment
+- FLASK_SECRET_KEY (optional) — set a secure secret for sessions. If not set, a default 'change-me-to-a-random-secret' will be used (not for production).
+
+Files
+- app.py: Flask app and routes (signup, signin, logout, profile)
+- models.py: SQLite helper functions and DB initialization
+- templates/: Jinja2 templates (layout, index, signup, signin, profile, employer dashboard)
+- static/: CSS file
+- data.db: created automatically on first run
+
+Notes & next steps
+- Passwords are hashed with Werkzeug generate_password_hash.
+- Sessions are cookie-based via Flask-Login.
+- Roles are stored on the users table; you can protect endpoints using the require_roles decorator in app.py.
+- This is a simple, easy-to-extend starting point for a server-rendered site. For production use: set a strong FLASK_SECRET_KEY, enable HTTPS, and consider additional security (CSRF protection via Flask-WTF, input validation, rate limiting).
+```

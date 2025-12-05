@@ -1,31 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GetAJob</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
-  </head>
+{% extends "layout.html" %}
 
-  <body>
-    <header class="navbar">
-      <div class="logo-area">
-        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="logo" class="logo" />
-        <h1 class="brand">GetAJob</h1>
-      </div>
-      <nav class="nav-links">
-        <a href="/signup">Sign Up</a>
-        <a href="/login">Login</a>
-        <a href="/jobs">Find Jobs</a>
-        <a href="/maps">Maps</a>
-      </nav>
-    </header>
+{% block title %}GetAJob — Home{% endblock %}
 
-    <main class="home-content">
-      <h2>Welcome to GetAJob</h2>
-      <p>Find your next opportunity, connect with employers, and explore nearby workplaces.</p>
-      <a href="/jobs" class="cta-btn">Start Searching</a>
-    </main>
-  </body>
-</html>
+{% block content %}
+<section class="hero">
+  <h1>GetAJob</h1>
+  <div class="subtitle">Your user friendly job finder</div>
+
+  <h2 style="margin-top:60px; font-size:34px; color:var(--primary); font-weight:700;">
+    Only one step away from finding your future
+  </h2>
+
+  <div class="cta">
+    <a class="btn btn-primary" href="{{ url_for('signup') }}">Get Started</a>
+  </div>
+</section>
+{% endblock %}
