@@ -1,0 +1,74 @@
+.job-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 400px;
+    padding: 36px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 16px #eee;
+}
+
+.page-control {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    max-width: 400px;
+    padding: 36px;
+}
+
+/* Dropdown container */
+.tag-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+/* Button */
+.tag-dropdown-btn {
+  padding: 8px 14px;
+  background: #f0f2f5;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Dropdown menu */
+.tag-dropdown-menu {
+  display: none;
+  position: absolute;
+  background: white;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  margin-top: 8px;
+  width: 220px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+}
+
+/* When open */
+.tag-dropdown-menu.open {
+  display: block;
+}
+
+/* Bubble checkboxes */
+.tag-bubble {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: #eef1f5;
+  border: 1px solid #d0d4da;
+  margin: 4px;
+  cursor: pointer;
+}
+
+.tag-bubble input {
+  display: none;
+}
+
+.tag-bubble input:checked + span {
+  background: #4a90e2;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 14px;
+}

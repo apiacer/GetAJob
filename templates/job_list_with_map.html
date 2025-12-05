@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jobs + Map</title>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/maps.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/job_list.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Inject job data -->
+  <script>
+    window.JOBS = "{{ jobs | tojson }}";
+  </script>
+
+  <script defer src="{{ url_for('static', filename='js/maps.js') }}"></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="page-header">
+    <h2>Job Listings + Map</h2>
+    <a class="home-link" href="/">Home</a>
+  </header>
+
+  <!-- Unified Search Form -->
+  <section class="filters">
+    <form method="get" action="{{ url_for('jobs_list') }}" id="searchForm">
+      <input type="text" name="q" id="q" placeholder="Search keyword/title" value="{{ q or '' }}" />
+
+      <div class="row">
+        <input type="text" name="location" id="loc" placeholder="Location" value="{{ location or '' }}" />
+
+        <div class="tag-dropdown">
+  <button type="button" class="tag-dropdown-btn" onclick="document.getElementById('tagDropdownMenu').classList.toggle('open')">
+    Select Tags
+  </button>
+  <div id="tagDropdownMenu" class="tag-dropdown-menu">
+    {% for t in all_tags %}
+      <label class="tag-bubble">
+        <input type="checkbox" name="tags" value="{{ t.name }}" {% if t.name in (tags or []) %}checked{% endif %}>
+        <span>{{ t.name }}</span>
+      </label>
+    {% endfor %}
+  </div>
+</div>
+
+        <button type="submit" id="applyFilters">Search</button>
+      </div>
+    </form>
+  </section>
+
+  <p><a href="{{ url_for('job_new') }}">Post a new job</a></p>
+
+  <!-- Results + Map Grid -->
+  <section class="grid">
+    <!-- Job List -->
+    <div class="list" id="results">
+      {% if jobs %}
+        <ul>
+          {% for j in jobs %}
+            <a class="job-card" href="{{ url_for('job_view', post_id=j.post_id) }}">
+              <div>{{ j.title }}</div>
+              <div>{{ j.location or 'N/A' }}</div>
+            </a>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No results.</p>
+      {% endif %}
+
+      <!-- Pagination -->
+      <div class="page-control">
+        {% if not hide_prev %}
+          <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page_num-1) }}">Prev</a>
+        {% else %}<div></div>{% endif %}
+
+        <span>Page {{ page_num }}</span>
+
+        {% if not hide_next %}
+          <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page_num+1) }}">Next</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+  </section>
+</body>
+</html>

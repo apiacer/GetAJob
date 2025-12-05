@@ -68,3 +68,32 @@ body {
 .signup-link a:hover {
   text-decoration: underline;
 }
+
+ .flashes {
+  list-style: none;
+  padding: 0;
+  margin: 15px auto;
+  max-width: 400px;
+}
+
+.flashes li {
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  text-align: center;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Flash color variants */
+.flashes li.success {
+  background-color: #4caf50; /* green */
+}
+
+.flashes li.error {
+  background-color: #f44336; /* red */
+}
+
+.flashes li.info {
+  background-color: #2196f3; /* blue */
+}

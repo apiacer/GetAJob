@@ -1,204 +1,142 @@
 import sqlite3
 import bcrypt
 import threading
+import re
+from abc import ABC, abstractmethod
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
 
+DEBUG = True
 DB_PATH = "test.db"
 DEFULT_TAGS = ["test1", "test2", "test3", "test4", "test5"]
-    
+
 class Base:
-    def __init__(self, cur:sqlite3.Cursor, conn:sqlite3.Connection, name:str, field:dict, debug:bool=False):
+    tables = []
+    _lock = threading.Lock()
+    def __init__(self, name:str, db_path:str, debug:bool=False, ):
+        self.name = name
+        self.db_path = db_path
         self.debug = debug
-        self._lock = threading.Lock()
-        self._cur = cur
-        self._conn = conn
-        self._name = name
-        self._field = field
+        Base.tables.append(self.name)
+    
+    # sql 
+    def _execute_sql(self, sql:str, params:list|tuple=None)->tuple[bool, list[dict]|None]:
+        try:
+            with Base._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cur = conn.cursor()
+                    cur.execute("PRAGMA foreign_keys = ON")
 
+                    if params is None:
+                        cur.execute(sql)
+                    else:
+                        cur.execute(sql, params)
+                    res = cur.fetchall()
+                    res = [dict(row) for row in res]
+                    if self.debug:
+                        print(
+                            f"---- debug info ----\n"
+                            f"execute sql:\n{sql}\n\n"
+                            f"params:\n{params}\n\n"
+                            f"res:\n{res}\n\n"
+                            f"----------------\n"
+                        )
+                    return True, res
+        
+        except Exception as e:
+            msg = (
+                f"----error msg ----\n"
+                f"SQL Error:\n{sql}\n\n"
+                f"params: {params}\n\n"
+                f"Error: {e}\n\n"
+                f"----------------\n"
+            )
+            print(msg)
+            return False, msg 
+        
+    def _sql_insert(self, param:dict)->tuple[bool, list|None]:
+        param = {key:val for key, val in param.items() if val is not None}
+        columns = ", ".join(param.keys())
+        placeholders = ", ".join("?" for _ in param) 
+        val = list(param.values())
+        sql= f"""INSERT INTO {self.name} ({columns}) VALUES ({placeholders})"""
+        return self._execute_sql(sql, val)
+    
+    def _get_columns(self)->tuple[bool, list|None]:
+        return self._execute_sql(f"PRAGMA table_info({self.name});")
+    
+class User(Base):
+    def __init__(self, db_path:str, debug:bool = True):
+        super().__init__("user", db_path, debug)
         self._create_table()
-
-    # ----util----
+        self._trigger_update_modify_time()
+        
+    # utils for user
     @staticmethod
     def _hash(data:str)->bytes:
         hashed = bcrypt.hashpw(data.encode(), bcrypt.gensalt())
         return hashed
-    
-    def _validate_columns(self, column_name:list)->tuple[bool, str]:
-        # Validate all columns
-        for column in column_name:
-            # check only keys not value of the field 
-            if column not in self._field:
-                # add logger later
-                return False, f"invalid column: {column}"
-            
-        return True, "all column valid"
 
-    # ----sql operation----
+    # utils
+    def _validate_password(self, password:str)->tuple[bool, str]:
+        # check password length
+        if len(password) < 8:
+            return False, "password too short"
+        
+        # check for special character requirement
+        pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_])[A-Za-z\d@$!%*?&_]{8,}$'
+        if not re.match(pattern, password):
+            return False, "password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
+        
+        return True, "valid password"
+
+    def _validate_user_name(self, user_name:str)->tuple[bool, str]:
+        # check user name length
+        if len(user_name) < 4:
+            return False, "username too short"
+        return True, "valid username"
+    
+    # -------- need to add validate phone logic -------------
+    def _validate_phone(self, phone:str)->tuple[bool, str]:
+        return True, "valid phone number"
+
+    def _validate_email(self, email:str)->tuple[bool, str]:
+        # basic pattern for email: text@text.text
+        pattern = r'^[^@]+@[^@]+\.[^@]+$'
+        if not re.match(pattern, email):
+            return False, "Invalid email format"
+        return True, "valid email"
+
+    # sql
     def _create_table(self)->None:
-        ### fix create table with constraints
-        field = ", ".join([key+" "+" ".join(val) for key, val in self._field.items()])
-        # test 
-        # print(f"CREATE TABLE IF NOT EXISTS {self._name} ({field})")
-        with self._lock:
-            self._cur.execute(f"CREATE TABLE IF NOT EXISTS {self._name} ({field})")
-            self._conn.commit()
-
-    def _insert_data(self, data:dict)->tuple[bool, str]:
-        try:
-            # Validate all columns
-            # print(data)
-            v = self._validate_columns(data.keys())
-            if not v[0]:
-                return v
-                
-            columns = ", ".join(data.keys())
-            placeholders = ", ".join("?" for _ in data) 
-            val = list(data.values())
-            with self._lock:
-                self._cur.execute(f"""
-                    INSERT INTO {self._name} ({columns}) VALUES ({placeholders})
-                """, val)
-                self._conn.commit()
-            return True, "success"
-
-        except sqlite3.Error as e:
-            error_msg = f"insert failed: {e}"
-            # add logger later
-            self._conn.rollback()
-            return False, error_msg
-        
-    # warning please always send in both params or will deletes all rows
-    def _delete_data(self, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
-        try:
-            # check if user exist
-            res = self._select_data(condition_clause, condition_val)
-            if not res[0]:
-                return res
-            
-            with self._lock:
-                self._cur.execute(f"""
-                DELETE FROM {self._name} WHERE {condition_clause}
-                """, condition_val)
-
-                self._conn.commit()
-
-            # check if user still exist
-            res = self._select_data(condition_clause, condition_val)
-            if res[0]:
-                return False, "delete failed: user still exist after deleting"
-            
-            return True, "success"
-        
-        except sqlite3.Error as e:
-            error_msg = f"delete failed: {e}"
-            # add logger later
-            self._conn.rollback()
-            return False, error_msg
-
-    def _select_data(self, condition_clause:str="1=1", condition_val:list=None, 
-                     column:list[str]=["*"], order_by:str=None, limit:int=None, desc:bool=False, offset:int=None)->tuple[bool, list[dict]|str]:
-        try:
-            if condition_val is None:
-                condition_val = []
-
-            column = ", ".join(column)
-            sql = f"SELECT {column} FROM {self._name} WHERE {condition_clause} "
-
-            # select with order
-            if order_by:
-                res = self._validate_columns([order_by])
-                if not res[0]:
-                    return res
-                
-                sql += f"ORDER BY {order_by} "
-                if desc:
-                    sql += "DESC "
-
-            # select with limit
-            if limit:
-                sql += "LIMIT ? "
-                condition_val.append(limit)
-
-            # select with offset
-            if offset:
-                sql += "OFFSET ?"
-                condition_val.append(offset)
-
-            if self.debug:
-                print("---- debug msg ----")
-                print(f"select sql: {sql}")
-                print(f"var: {condition_val}")
-                print("----------------")
-
-            with self._lock:
-                self._cur.execute(sql, condition_val)
-
-                rows = self._cur.fetchall()
-                rows = [dict(row) for row in rows]
-                # if select is empty
-                if not rows:
-                    return False, "data not found"
-            
-                return True, rows
-        
-        except sqlite3.Error as e:
-            error_msg = f"select failed: {e}"
-            return False, error_msg
-    
-    def _update_data(self, new_data:dict, condition_clause:str="1=1", condition_val:list=[])->tuple[bool, str]:
-        try:
-            # key validation check
-            check = self._validate_columns(new_data.keys())
-            if not check[0]:
-                return False, check[1]
-            
-            # config set res
-            set_clause = ", ".join([f"{key}=?" for key in new_data.keys()])
-            set_val = list(new_data.values())
-            
-            val = set_val+condition_val
-            sql = f"UPDATE {self._name} SET {set_clause} WHERE {condition_clause}"
-            if self.debug:
-                print("---- debug msg ----")
-                print(sql, val)
-                print("----------------")
-            with self._lock:
-                self._cur.execute(sql, val)
-                self._conn.commit()
-            return True, "success"
-        
-        except sqlite3.Error as e:
-            error_msg = f"update failed: {e}"
-            # add logger later
-            self._conn.rollback()
-            return False, error_msg
- 
-class User(Base):
-    def __init__(self, cur, conn, debug):
-        field = {
-            "user_id": ["INTEGER", "PRIMARY KEY"],
-            "user_name": ["TEXT", "UNIQUE", "NOT NULL"],
-            "email": ["TEXT", "UNIQUE", "NOT NULL"],
-            "phone": ["TEXT", "UNIQUE"],
-            "password_hash": ["BLOB", "NOT NULL"],
-            "age": ["INTEGER", ],
-            "address": ["TEXT",],
-            "first_name": ["TEXT", ],
-            "last_name": ["TEXT", ],
-            "location": ["TEXT", ],
-            "profile": ["TEXT", ],
-            "pfp":["BLOB"],
-            "is_admin": ["BOOLEAN", "DEFAULT 0"],
-            "is_banned": ["BOOLEAN", "DEFAULT 0"],
-            "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
-            "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"]
-        }
-        super().__init__(cur=cur, conn=conn, field=field, name="user", debug=debug)
-        #self._trigger_update_modify_time()
-
-    # auto update after update
-    def _trigger_update_modify_time(self):
-        print("in trigger")
-        self._cur.execute("""
+        table = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                user_id INTEGER PRIMARY KEY,
+                user_name TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                phone TEXT UNIQUE,
+                password_hash BLOB NOT NULL,
+                age INTEGER,
+                address TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                location TEXT,
+                profile TEXT,
+                pfp BLOB,
+                avg_rating INTEGER,
+                rate_num INTEGER,
+                is_verified BOOLEAN DEFAULT 0,
+                is_admin BOOLEAN DEFAULT 0,
+                is_banned BOOLEAN DEFAULT 0,
+                create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                modify_time DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+        self._execute_sql(table)
+          
+    def _trigger_update_modify_time(self)->None:
+        trigger = f"""
             CREATE TRIGGER IF NOT EXISTS update_user_modify_time
             AFTER UPDATE ON user
             FOR EACH ROW
@@ -208,150 +146,320 @@ class User(Base):
                 SET modify_time = CURRENT_TIMESTAMP
                 WHERE user_id = OLD.user_id;
             END;
-        """)
-        self._conn.commit()
-
-    # utils
-    def _validate_password(self, password:str)->tuple[bool, str]:
-        # check password length
-        if len(password) < 8:
-            return False, "password too short"
-        
-        # check for special character requirement
-        # if ["_", ".", "#", "@", "!"] not in password:
-        #     return False, "need at least one special character"
-        return True, "valid password"
-
-    def _validate_user_name(self, user_name:str)->tuple[bool, str]:
-        # check user name length
-        if len(user_name) < 4:
-            return False, "username too short"
-        return True, "valid password"
+        """
+        self._execute_sql(trigger)
     
-    def _validate_phone(self, phone:str)->tuple[bool, str]:
-        pass
+    def create_account(self, user_name:str, password:str, email:str, first_name:str=None, last_name:str=None)->tuple[bool, str]:
+        val_user_name = self._validate_user_name(user_name)
+        val_password = self._validate_password(password)
+        val_email = self._validate_email(email)
+        msg = ""
+        if not val_user_name[0]:
+            msg += val_user_name[1] + "\n"
 
-    def _validate_email(self, email:str)->tuple[bool, str]:
-        pass
+        if not val_email[0]:
+            msg += val_email[1] + "\n"
 
-    # actions
-    def create_account(self, user_name:str, password:str, email:str)->tuple[bool, str]:
-        # check requirement 
-        v1 = self._validate_password(password)
-        v2 = self._validate_user_name(user_name)
-        if not v1[0] and not v2[0]:
-            return False, v1[1]+" "+v2[1]
+        if not val_password[0]:
+            msg += val_password[1] + "\n"
+
+        if msg:
+            return False, msg
+
+        password_hash = self._hash(password)
+        return self._sql_insert({"user_name":user_name, "password_hash":password_hash, "email":email, "first_name": first_name, "last_name": last_name})
+
+    # log in
+    def verify_password(self, user_name:str, password:str)->tuple[bool, str]:
+        sql = f"""
+            SELECT password_hash
+            FROM {self.name}
+            WHERE user_name=?;
+        """
+        res = self._execute_sql(sql, (user_name, ))
         
-        if not v1[0]:
-            return v1
-        
-        if not v2[0]:
-            return v2
-
-        param = {"user_name":user_name, "password_hash":self._hash(password), "email":email}
-        return super()._insert_data(param)
-    
-    # get
-    def get_user_info(self, user_name:str=None, user_id:int=None, email:str=None)->tuple[bool, dict|str]:
-        if user_name is None and user_id is None and email is None:
-            return False, "please enter either user_name, user_id or email to get user info"
-        fields = ["user_id", "user_name", "email", "phone", "age", "address", "first_name", "last_name", 
-        "location", "profile", "pfp", "is_admin", "is_banned", "create_time", "modify_time"]
-        if user_name:
-            res = self._select_data("user_name=?", [user_name], fields)
-        elif user_id:
-            res = self._select_data("user_id=?", [user_id], fields)
-        elif email:
-            res = self._select_data("email=?", [email], fields)
-
         if not res[0]:
             return res
         
-        return True, res[1][0]
-    
-    # log in
-    def verify_password(self, user_name:str, password:str)->tuple[bool, str]:
-        try:
-            res = self._select_data("user_name=?", [user_name], ["password_hash"])
-            if not res[0]:
-                return False, res[1]
-            
-            if bcrypt.checkpw(password.encode(), res[1][0]['password_hash']):
-                return True, "log in success"
-            
-            return False, "Invalid password"
-        except Exception as e:
-            return False, f"Verification failed: {e}"
-
-    # updates
-    def update_user_name(self, new_user_name:str, old_user_name:str)->tuple[bool, str]:
-        # check reqirements
-        v = self._validate_user_name(new_user_name)
-        if not v[0]:
-            return v
+        if not res[1]:
+            return False, "user not found"
         
-        return self._update_data({"user_name": new_user_name}, "user_name=?", [old_user_name])
-    
-    def update_password(self, user_name:str, new_password:str)->tuple[bool, str]:
-        v = self._validate_password(new_password)
-        if not v[0]:
-            return v
+        # Verify password with bcrypt
+        if bcrypt.checkpw(password.encode(), res[1][0].get("password_hash")):
+            return True, "log in success"
+
+        return False, "Invalid password"
+
+    # user info
+    def get_user_info(self, user_name:str=None, user_id:int=None, email:str=None)->tuple[bool, dict|str]:
+        if user_name is None and user_id is None and email is None:
+            return False, "please enter either user_name, user_id or email to get user info"
         
-        return self._update_data({"password_hash": self._hash(new_password)}, "user_name=?", [user_name])
+        elif user_name:
+            condition_clause = "user_name"
+            condition_val = user_name
+        
+        elif user_id:
+            condition_clause = "user_id"
+            condition_val = user_id
 
-    def update_user_profile(self, user_name:str, email:str=None, phone:str=None, 
-                            age:int=None, address:str=None, first_name:str=None, 
-                            last_name:str=None, location:str=None,
-                            profile:str=None, pfp=None):
-        param = {
-            "email":email, "phone":phone, "age":age, "address":address, "first_name":first_name,
-            "last_name":last_name, "location":location, "profile":profile, "pfp":pfp
-        }
-        param = {k: v for k, v in param.items() if v is not None}
+        elif email:
+            condition_clause = "email"
+            condition_val = email
 
-        return self._update_data(param, "user_name=?", [user_name])
-
-    # admin
-    def ban_user(self, user_name:str)->tuple[bool, str]:
-        return self._update_data({"is_banned":1}, "user_name=?", [user_name])
-
-    def unban_user(self, user_name:str)->tuple[bool, str]:
-        return self._update_data({"is_banned":0}, "user_name=?", [user_name])
-
-    def get_all_banned_user(self)->tuple[bool, list]:
-        return self._select_data("is_banned=?", [1], column=["user_id", "user_name", "email"], order_by="modify_time")
+        sql = f"""
+            SELECT user_id, user_name, email, phone, age, address, first_name, last_name,
+                location, profile, pfp, is_admin, is_banned, create_time, modify_time
+            FROM {self.name}
+            WHERE {condition_clause}=?;
+        """
+        res = self._execute_sql(sql, [condition_val, ])
+        if not res[0]:
+            return res
+        if not res[1]:
+            return False, "user not found"
+        return res[0], res[1][0]
     
-    # delete account
-    def delete_user(self, user_name:str=None, user_id:str=None, email:str=None)->tuple[bool, str]:
+    def update_user_info(self, user_id:str, user_name:str=None, password:str=None, email:str=None, 
+                            phone:str=None, age:int=None, address:str=None, 
+                            first_name:str=None, last_name:str=None, location:str=None,
+                            profile:str=None, pfp:str=None)->tuple[bool, str]:
+        set_clause = []
+        param = []
+        error_msg = ""
+
+        if user_name:
+            res = self._validate_user_name(user_name)
+            if res[0]:
+                set_clause.append("user_name=?")
+                param.append(user_name)
+            else:
+                error_msg += res[1]+"\n"
+
+        if password:
+            res = self._validate_password(password)
+            if res[0]:
+                set_clause.append("password_hash=?")
+                param.append(self._hash(password))
+            else:
+                error_msg += res[1]+"\n"
+
+        if email:
+            res = self._validate_email(email)
+            if res[0]:
+                set_clause.append("email=?")
+                param.append(email)
+            else:
+                error_msg += res[1]+"\n"
+
+        if phone:
+            res = self._validate_phone(phone)
+            if res[0]:
+                set_clause.append("phone=?")
+                param.append(phone)
+            else:
+                error_msg += res[1]+"\n"
+
+        if age:
+            set_clause.append("age=?")
+            param.append(age)
+
+        if address:
+            set_clause.append("address=?")
+            param.append(address)
+
+        if first_name:
+            set_clause.append("first_name=?")
+            param.append(first_name)
+
+        if last_name:
+            set_clause.append("last_name=?")
+            param.append(last_name)
+
+        if location:
+            set_clause.append("location=?")
+            param.append(location)
+
+        if profile:
+            set_clause.append("profile=?")
+            param.append(profile)
+
+        if pfp:
+            set_clause.append("pfp=?")
+            param.append(pfp)
+
+        if not set_clause:
+            return False, "no user info passed in to update"
+
+        if error_msg:
+            return False, error_msg
+
+        param.append(user_id)
+
+        sql = f"""
+            UPDATE {self.name} 
+            SET {", ".join(set_clause)}
+            WHERE user_id=?
+        """
+
+        return self._execute_sql(sql, param)
+    
+    def clear_user_info(self, user_id:str, 
+                            phone:bool=False, age:bool=False, address:bool=False, 
+                            first_name:bool=False, last_name:bool=False, location:bool=False,
+                            profile:bool=False, pfp:bool=False)->tuple[bool, str]:
+        set_clause = []
+        # username email not null
+        if phone:
+            set_clause.append("phone=None")
+
+        if age:
+            set_clause.append("age=None")
+
+        if address:
+            set_clause.append("address=None")
+
+        if first_name:
+            set_clause.append("first_name=None")
+
+        if last_name:
+            set_clause.append("last_name=None")
+
+        if location:
+            set_clause.append("location=None")
+
+        if profile:
+            set_clause.append("profile=None")
+
+        if pfp:
+            set_clause.append("pfp=None")
+
+        if not set_clause:
+            return False, "no user fields set to None"
+        
+        sql = f"""
+            UPDATE {self.name} 
+            SET {", ".join(set_clause)}
+            WHERE user_id=?
+        """
+
+        return self._execute_sql(sql, [user_id])
+
+    def delete_user(self, user_name:str=None, user_id:str=None, email:str=None):
         if user_id is None and user_name is None and email is None:
             return False, "please enter either user_name, user_id or email to delete user"
-        elif user_name:
-            return self._delete_data(f"user_name=?", [user_name])
-        elif user_id:
-            return self._delete_data(f"user_id=?", [user_id])
-        elif email:
-            return self._delete_data(f"email=?", [email])
         
+        elif user_name:
+            condition_clause = "user_name"
+            condition_val = user_name
+
+        elif user_id:
+            condition_clause = "user_id"
+            condition_val = user_id
+
+        elif email:
+            condition_clause = "email"
+            condition_val = email
+
+        sql = f"""
+            DELETE FROM {self.name}
+            WHERE {condition_clause}=?
+        """
+
+        return self._execute_sql(sql, [condition_val])
+    
+    # admin
+    def admin_action(self, user_name:str=None, user_id:int=None, email:str=None, is_banned:bool=None, is_admin:bool=None, is_verified:bool=None):
+        if not user_name and not user_id and not email:
+            return False, "please enter either user_name, user_id or email"
+
+        if not is_admin and not is_banned and not is_verified:
+            return False, "please enter an action to perform"
+        
+        elif user_name:
+            condition_clause = "user_name"
+            condition_val = user_name
+        
+        elif user_id:
+            condition_clause = "user_id"
+            condition_val = user_id
+
+        elif email:
+            condition_clause = "email"
+            condition_val = email
+
+        if is_banned:
+            sql = f"""
+                UPDATE {self.name}
+                SET is_banned=1
+                WHERE {condition_clause}=?
+            """
+            return self._execute_sql(sql, (condition_val, ))
+        
+        if is_admin:
+            sql = f"""
+                UPDATE {self.name}
+                SET is_admin=1
+                WHERE {condition_clause}=?
+            """
+            return self._execute_sql(sql, (condition_val, ))
+    
+        if is_verified:
+            sql = f"""
+                UPDATE {self.name}
+                SET is_verified=1
+                WHERE {condition_clause}=?
+            """
+            return self._execute_sql(sql, (condition_val, ))
+        
+    def get_all_banned_user(self)->tuple[bool, list]:
+        sql = f"""
+            SELECT * 
+            FROM {self.name}
+            WHERE is_banned=1
+        """
+        return self._execute_sql(sql)
+    
 class Post(Base):
-    def __init__(self, cur, conn, debug):
-        field = {
-            "post_id": ["INTEGER", "PRIMARY KEY"],
-            "title": ["TEXT", "NOT NULL"],
-            "description": ["TEXT", "NOT NULL"],
-            "owner_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id) ON DELETE CASCADE"],
-            "location": ["TEXT"],
-            "budget": ["TEXT"],
-            "create_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
-            "modify_time": ["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
-        }
-        super().__init__(cur=cur, conn=conn, name="post", field=field, debug=debug)
+    def __init__(self, db_path, debug = False):
+        super().__init__("post", db_path, debug)
+        self._create_table()
         self._trigger_update_modify_time()
 
-    # auto update after update
+    # utils
+    def addr2cord(self, addr:str)->tuple[bool, tuple|str]:
+        geolocator = Nominatim(user_agent="getajob")
+        try:
+            location = geolocator.geocode(addr)
+
+            return True, (location.latitude, location.longitude)
+        
+        except:
+            return False, "invalid location"
+    
+    # sql
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                post_id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                owner_id INTEGER NOT NULL REFERENCES user(user_id) ON DELETE CASCADE,
+                location TEXT,
+                latitude REAL, 
+                longitude REAL,
+                budget TEXT,
+                create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                modify_time DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+
+        return self._execute_sql(sql)
+    
     def _trigger_update_modify_time(self):
-        self._cur.execute(f"""
+        sql = f"""
             CREATE TRIGGER IF NOT EXISTS update_post_modify_time
-            AFTER UPDATE ON post
+            AFTER UPDATE ON {self.name}
             FOR EACH ROW
             WHEN OLD.modify_time = NEW.modify_time
             BEGIN
@@ -359,161 +467,431 @@ class Post(Base):
                 SET modify_time = CURRENT_TIMESTAMP
                 WHERE post_id = OLD.post_id;
             END;
-        """)
-        self._conn.commit()
+        """
 
+        return self._execute_sql(sql)
+    
+    def get_last_post_id(self)->tuple[bool, list]:
+        # minimal helper to fetch last inserted id without modifying _sql_insert
+        return self._execute_sql("SELECT MAX(post_id) AS id FROM post")
+    
     def create_post(self, title:str, description:str, owner_id:int, location:str=None, budget:str=None):
-        return self._insert_data({"title":title, "description":description, "owner_id":owner_id, "location":location, "budget":budget})
+        latitude = None
+        longitude = None
+
+        if location:
+            res = self.addr2cord(location)
+            if not res[0]:
+                return False, "invalid location"
+            latitude, longitude = res[1]
+
+        return self._sql_insert({"title":title, "description":description, "owner_id":owner_id, "location":location, "budget":budget, "latitude":latitude, "longitude":longitude})
+    
+    def update_post(self, post_id:int, title:str=None, description:str=None, location:str=None, budget:str=None):
+        set_clause = []
+        param = []
+
+        if title:
+            set_clause.append("title=?")
+            param.append(title)
+
+        if description:
+            set_clause.append("description=?")
+            param.append(description)
+
+        if location:
+            set_clause.append("location=?")
+            param.append(location)
+
+            res = self.addr2cord(location)
+            if not res[0]:
+                return False, "invalid location"
+            latitude, longitude = res[1]
+            set_clause.append("latitude=?")
+            param.append(latitude)
+            set_clause.append("longitude=?")
+            param.append(longitude)
+            
+        if budget:
+            set_clause.append("budget=?")
+            param.append(budget)
+
+        if not set_clause:
+            return False, "no post info passed in to update"
+        
+        param.append(post_id)
+        sql = f"""
+            UPDATE {self.name}
+            SET {", ".join(set_clause)}
+            WHERE post_id=?
+        """
+        return self._execute_sql(sql, param)
 
     def delete_post(self, post_id:int):
-        return self._delete_data("post_id=?", [post_id])
-
-    def update_post(self, post_id:int, title:str=None, description:str=None, location:str=None, budget:str=None):
-        return self._update_data({"title":title, "description":description, "location":location, "budget":budget}, "post_id=?", [post_id])
-
+        sql = f"""
+        DELETE FROM {self.name}
+        WHERE post_id=?
+        """
+        return self._execute_sql(sql, [post_id])
+    
     def select_post(self, post_id:int):
-        return self._select_data("post_id=?", [post_id])
-    
+        sql = f"""
+        SELECT * FROM {self.name}
+        WHERE post_id=?
+        """
+        return self._execute_sql(sql, [post_id])
+
     def select_user_post(self, user_id:int):
-        return self._select_data("owner_id=?", [user_id])
+        sql = f"""
+        SELECT * FROM {self.name}
+        WHERE owner_id=?
+        """
+        return self._execute_sql(sql, [user_id])
 
-    def select_latest_n_posts(self, n:int=10, offset:int=0, tags:list=None, key_words:list=None):
-        return self._select_data(order_by="modify_time", limit=n, offset=offset)
+
     
-class Message(Base):
-    def __init__(self, cur, conn, debug):
-        field = {
-            "message_id":["INTEGER", "PRIMARY KEY"],
-            "sender_id":["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
-            "receiver_id":["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
-            "if_read":["BOOLEAN", "DEFAULT 0"],
-            "message":["TEXT", "NOT NULL"],
-            "timestamp":["DATETIME", "DEFAULT CURRENT_TIMESTAMP"],
+    '''
+    filter = {
+        "limit":5,
+        "offset":0,
+        "key_words":None,
+        "tags":None
+        "geo"{
+            "loc": None,
+            "dist": None
         }
-        super().__init__(cur=cur, conn=conn, name="message", field=field, debug=debug)
+    }
+    '''
+    def search_post(self, filter:dict):
+        tags = filter.get("tags") or []
+        key_words = filter.get("key_words") or []
 
-    def get_chat_room(self, user1:int, user2:int):
-        return self._select_data("(sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)", [user1, user2, user2, user1])
+        if filter.get("geo"):
+            res = self.addr2cord(filter["geo"]["loc"])
+            if not res[0]:
+                return res
+
+        sql = f"""
+            SELECT p.*
+            FROM {self.name} p
+            WHERE 1=1
+        """
+
+
+    # reconstruct the whole fucking function :/
+    def search_posts(self, limit: int = 5, offset: int = 0,
+                    tags: list = None, key_words: list = None, 
+                    location: str = None, dist: int = None):
+        
+        key_words = key_words or []   # ensure list
+        tags = tags or []             # ensure list
+
+        sql = f"""
+            SELECT p.*
+            FROM {self.name} p
+        """
+
+        # Only join tag tables if tags are provided
+        if tags:
+            sql += """
+                JOIN post_tag pt ON p.post_id = pt.post_id
+                JOIN tags t ON pt.tag_id = t.tag_id
+            """
+
+        sql += " WHERE 1=1 "  # simplifies conditional appending
+
+        conditions = []
+        params = []
+
+        # Keyword conditions (match ALL)
+        for kw in key_words:
+            conditions.append("(p.title LIKE ? OR p.description LIKE ?)")
+            like = f"%{kw}%"
+            params.extend([like, like])
+
+        # Tag filter (match ALL tags)
+        if tags:
+            # only filter after JOIN
+            placeholders = ",".join("?" for _ in tags)
+            conditions.append(f"t.tag_name IN ({placeholders})")
+            params.extend(tags)
+
+        # Add WHERE conditions
+        if conditions:
+            sql += " AND " + " AND ".join(conditions)
+
+        # Apply HAVING only when tags exist
+        if tags:
+            sql += " GROUP BY p.post_id HAVING COUNT(DISTINCT t.tag_name) = ?"
+            params.append(len(tags))
+
+        sql += " ORDER BY p.modify_time DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        return self._execute_sql(sql, params)
+
+class Message(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__("message", db_path, debug)
+        self._create_table()
+
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                message_id INTEGER PRIMARY KEY,
+                sender_id INTEGER NOT NULL REFERENCES user(user_id),
+                receiver_id INTEGER NOT NULL REFERENCES user(user_id),
+                if_read BOOLEAN DEFAULT 0,
+                message TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+        return self._execute_sql(sql)
+
+    def send_message(self, from_user_id:int, to_user_id:int, message:str):
+        sql = """
+            INSERT INTO message (sender_id, receiver_id, message)
+            VALUES (?, ?, ?);
+        """
+        return self._execute_sql(sql, (from_user_id, to_user_id, message))
+
+    def get_room(self, user_id1:int, user_id2:int):
+        sql = f"""
+            SELECT *
+            FROM {self.name}
+            WHERE 
+                (sender_id = ? AND receiver_id = ?)
+                OR
+                (sender_id = ? AND receiver_id = ?)
+            ORDER BY timestamp ASC;
+        """
+        return self._execute_sql(sql, (user_id1, user_id2, user_id2, user_id1))
 
     def read(self, sender_id:int, receiver_id:int):
-        return self._update_data({"if_read":1}, "sender_id=? AND receiver_id=?", [sender_id, receiver_id])
-
-    def send_message(self, sender_id:int, receiver_id:int, msg:str):
-        return self._insert_data({"sender_id":sender_id, "receiver_id":receiver_id, "message":msg})
+        sql = f"""
+            UPDATE {self.name}
+            SET if_read = 1
+            WHERE sender_id = ?
+            AND receiver_id = ?
+            AND if_read = 0;
+        """
+        return self._execute_sql(sql, (sender_id, receiver_id))
     
 class Post_tag(Base):
-    def __init__(self, cur, conn, debug):
-        field = {
-            "post_id": ["INTEGER", "NOT NULL", "REFERENCES post(post_id) ON DELETE CASCADE"],
-            "tag_id": ["INTEGER", "NOT NULL", "REFERENCES tag(tag_id) ON DELETE CASCADE"],
-            "PRIMARY KEY": ["(post_id, tag_id)"]
-        }
+    def __init__(self, db_path, debug = False):
+        super().__init__("post_tag", db_path, debug)
+        self._create_table()
+        
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                post_id INTEGER NOT NULL REFERENCES post(post_id) ON DELETE CASCADE,
+                tag_id  INTEGER NOT NULL REFERENCES tag(tag_id) ON DELETE CASCADE,
+                PRIMARY KEY (post_id, tag_id)
+            );
+        """
+        return self._execute_sql(sql)
 
-        super().__init__(cur=cur, conn=conn, name="post_tag", field=field, debug=debug)
+    def add_tag2post(self, post_id, tag_id):
+        return self._sql_insert({
+            "post_id":post_id,
+            "tag_id":tag_id
+        })
 
-    def add_tag_to_post(self, post_id:int, tag_id:int):
-        return self._insert_data({"post_id":post_id, "tag_id":tag_id})
 
-    def delete_tag_from_post(self, post_id:int, tag_id:int):
-        return self._delete_data({"post_id":post_id, "tag_id":tag_id})
+    def delete_post_tag(self, post_id, tag_id):
+        sql = f"""
+            DELETE FROM {self.name}
+            WHERE post_id = ? AND tag_id = ?;
+        """
+        return self._execute_sql(sql, (post_id, tag_id))
 
-    def get_tagged_post_id(self, tag_id:int):
-        res = self._select_data("tag_id=?", [tag_id], ["post_id"])
-        if not res[0]:
-            return res
-        return True, [val["post_id"] for val in res[1]]
-    
+    def get_post_tag(self, ):
+        pass
+
 class Tag(Base):
-    def __init__(self, cur, conn, debug):
-        field = {
-            "tag_id": ["INTEGER", "PRIMARY KEY"],
-            "tag_name": ["TEXT", "UNIQUE", "NOT NULL"]
-        }
-
-        super().__init__(cur=cur, conn=conn, name="tag", field=field, debug=debug)
-
-        # load defult tag
+    def __init__(self, db_path, debug = False):
+        super().__init__("tag", db_path, debug)
+        self._create_table()
         for tag in DEFULT_TAGS:
             self.create_tag(tag)
 
-    def create_tag(self, tag_name:str)->tuple[bool, str]:
-        return self._insert_data({"tag_name": tag_name})
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                tag_id   INTEGER PRIMARY KEY,
+                tag_name TEXT UNIQUE NOT NULL
+            );
+        """
 
-    def delete_tag(self, tag_name:str)->tuple[bool, str]:
-        return self._delete_data("tag_name=?", [tag_name])
+        self._execute_sql(sql)
+
+    def create_tag(self, tag_name:str):
+        sql = f"""
+            INSERT OR IGNORE INTO {self.name} (tag_name)
+            VALUES (?);
+        """
+        return self._execute_sql(sql, (tag_name,))
+
+    def delete_tag(self, tag_name:str):
+        sql = f"""
+            DELETE FROM {self.name}
+            WHERE tag_name = ?;
+        """
+        return self._execute_sql(sql, (tag_name,))
 
     def get_tag_id(self, tag_name:str):
-        res = self._select_data("tag_name=?", [tag_name], ["tag_id"])
+        sql = f"""
+            SELECT tag_id
+            FROM {self.name}
+            WHERE tag_name = ?;
+        """
+        res = self._execute_sql(sql, (tag_name,))
         if not res[0]:
             return res
-        return True, res[1][0]["tag_id"]
-    
-class User_report(Base):
-    def __init__(self, cur, conn, debug):
-        field = {
-            "report_id": ["INTEGER", "PRIMARY KEY"],
-            "user_id": ["INTEGER", "NOT NULL", "REFERENCES user(user_id)"],
-            "description": ["TEXT", "NOT NULL"]
-        }
-        super().__init__(cur=cur, conn=conn, name="user_report", field=field, debug=debug)
-
-    # user
-    def report_user(self, user_id:int, description:str)->tuple[bool, str]:
-        return self._insert_data({"user_id":user_id, "description":description})
-
-    # admin
-    def get_reported_users(self)->tuple[bool, list[str]|str]:
-        return self._select_data(column=["DISTINCT user_id"])
-
-    def get_user_reports(self, user_id:int)->tuple[bool, list[str]|str]:
-        return self._select_data("user_id=?", [user_id], ["report_id", "description"])
-
-    def delete_report(self, report_id:int)->tuple[bool, str]:
-        return self._delete_data("report_id=?", [report_id])
-
-
-class Database_api:
-    def __init__(self, db_path:str=DB_PATH, debug:bool = False):
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
-
-        # set return sqlite3.Row objects when selecting
-        self._conn.row_factory = sqlite3.Row
         
-        self._cur = self._conn.cursor()
+        if not res[1]:
+            return False, "no tag selected"
+        
+        return True, res[1][0].get("tag_id")
 
-        # load all table
-        self.tag = Tag(self._cur, self._conn, debug)
-        self.user = User(self._cur, self._conn, debug)
-        self.message = Message(self._cur, self._conn, debug)
-        self.post = Post(self._cur, self._conn, debug)
-        self.post_tag = Post_tag(self._cur, self._conn, debug)
-        self.report = User_report(self._cur, self._conn, debug)
+    def get_all_tag(self):
+        sql = f"""SELECT * FROM {self.name}"""
+        return self._execute_sql(sql)
+    
+class Counter(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__("counter", db_path, debug)
+        self._create_table()
+        self._add_default_row()
+        self._trigger_update_post_cnt()
+        self._trigger_update_user_cnt()
 
-        # enforce foreign key after load all tables
-        self._conn.execute("PRAGMA foreign_keys = ON;")
-        self._conn.commit()
+    def _create_table(self):
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS counter (
+                name TEXT PRIMARY KEY,
+                num INTEGER NOT NULL DEFAULT 0
+            );
+        """
+        return self._execute_sql(sql)
+    
+    def _add_default_row(self):
+        self._sql_insert({"name":"user"})
 
-    # call terminal to manual check databse for debug 
-    def terminal(self):
-        print("in terminal")
-        while True:
-            msg = input()
-            if msg == "commit":
-                self._conn.commit()
+        self._sql_insert({"name":"post"})
 
-            elif msg == "rollback":
-                self._conn.rollback()
+    def _trigger_update_user_cnt(self):
+        sql = f"""
+            CREATE TRIGGER IF NOT EXISTS increment_user_counter
+            AFTER INSERT ON user
+            BEGIN
+                UPDATE counter
+                SET num = num + 1
+                WHERE name = 'user';
+            END;
+        """
+        self._execute_sql(sql)
 
-            elif msg == "q":
-                print("quit terminal")
-                break
+        sql = """
+            CREATE TRIGGER IF NOT EXISTS decrement_user_counter
+            AFTER DELETE ON user
+            BEGIN
+                UPDATE counter
+                SET num = num - 1
+                WHERE name = 'user';
+            END;
+        """
+        self._execute_sql(sql)
 
-            try:
-                self._cur.execute(msg)
-                rows = self._cur.fetchall()
-                rows = [dict(row) for row in rows]
-                print(rows)
-            except Exception as e:
-                print(e)
 
-### add update modify time on all update function
+    def _trigger_update_post_cnt(self):
+        sql = """
+            CREATE TRIGGER IF NOT EXISTS increment_post_counter
+            AFTER INSERT ON post
+            BEGIN
+                UPDATE counter
+                SET num = num + 1
+                WHERE name = 'post';
+            END;
+        """
+        self._execute_sql(sql)
+
+        sql = """
+            CREATE TRIGGER IF NOT EXISTS decrement_post_counter
+            AFTER DELETE ON post
+            BEGIN
+                UPDATE counter
+                SET num = num - 1
+                WHERE name = 'post';
+            END;
+        """
+        self._execute_sql(sql)
+    
+    def get_user_count(self):
+        sql = "SELECT num FROM counter WHERE name='user'"
+        res = self._execute_sql(sql)
+        if not res[0]:
+            return res
+        
+        return True, res[1][0].get("num")
+
+    def get_post_count(self):
+        sql = "SELECT num FROM counter WHERE name='post'"
+        res = self._execute_sql(sql)
+        if not res[0]:
+            return res
+        return True, res[1][0].get("num")
+    
+
+# to be continued....
+class Report(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__(db_path, debug)
+
+class User_rating(Base):
+    def __init__(self, db_path, debug = False):
+        super().__init__(db_path, debug)
+
+# wrapper
+class Db_api:
+    def __init__(self, db_path:str=None, debug:bool=True):
+        if not db_path:
+            db_path = DB_PATH
+
+        self.user = User(db_path, debug)
+        self.post = Post(db_path, debug)
+        self.post_tag = Post_tag(db_path, debug)
+        self.tag = Tag(db_path, debug)
+        self.message = Message(db_path, debug)
+        self.counter = Counter(db_path, debug)
+
+# call terminal to manual check databse for debug 
+def terminal():
+    print("in terminal")
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    while True:
+        msg = input()
+        if msg == "commit":
+            conn.commit()
+
+        elif msg == "rollback":
+            conn.rollback()
+
+        elif msg == "q":
+            print("quit terminal")
+            break
+
+        try:
+            cur.execute(msg)
+            rows = cur.fetchall()
+            print(rows)
+
+        except Exception as e:
+            print(e)
+
+if __name__ == "__main__":
+    db = Db_api(DB_PATH, False)
+    terminal()

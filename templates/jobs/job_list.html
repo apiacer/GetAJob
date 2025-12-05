@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Jobs</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/job_list.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <p><a href="{{ url_for('home') }}">← Back Home</a></p>
+
+  <h1>Job Listings</h1>
+
+  <form method="get" action="{{ url_for('jobs_list') }}">
+    <input type="text" name="q" placeholder="Search title/description" value="{{ q or '' }}">
+    <input type="text" name="location" value="{{ location }}" value="{{ location or '' }}">
+    <input type="text" name="tags" placeholder="Tags (comma-separated)" value="{{ tags or '' }}">
+    <button type="submit">Search</button>
+  </form>
+
+  <p><a href="{{ url_for('job_new') }}">Post a new job</a></p>
+
+  {% if jobs %}
+    <ul>
+      {% for j in jobs %}
+        <!--li-->
+          <a class="job-card" href="{{ url_for('job_view', post_id=j.post_id) }}">
+            <div>{{ j.title }}</div>
+            <div>{{ j.location or 'N/A' }}</div>
+          </a>
+        <!--/li-->
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No results.</p>
+  {% endif %}
+
+  <div class="page-control">
+    {% if not hide_prev %}
+      <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page_num-1) }}">Prev</a>
+    {% else %}
+      <div></div>
+    {% endif %}
+    <span>Page {{ page_num }}</span>
+    {% if not hide_next %}
+      <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page_num+1) }}">Next</a>
+    {% endif %}
+  </div>
+</body>
+</html>
