@@ -121,6 +121,7 @@ class User(Base):
                 avg_rating INTEGER,
                 rate_num INTEGER,
                 is_verified BOOLEAN DEFAULT 0,  -- added column for email verification status
+                last_verification_sent DATETIME DEFAULT NULL,  -- track when verification email was last sent
                 is_admin BOOLEAN DEFAULT 0,
                 is_banned BOOLEAN DEFAULT 0,
                 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -173,13 +174,16 @@ class User(Base):
             FROM {self.name}
             WHERE user_name = ?;
         """
-        res = self._execute_sql(sql, user_name)
+        res = self._execute_sql(sql, [user_name])
         
         if not res[0]:
             return res
+        if not res[1]:
+            return False, "user not found"
         
         # Verify password with bcrypt
-        if bcrypt.checkpw(password.encode(), res[1][0]):
+        stored_hash = res[1][0]['password_hash']
+        if bcrypt.checkpw(password.encode(), stored_hash):
             return True, "log in success"
 
         return False, "Invalid password"
@@ -201,12 +205,16 @@ class User(Base):
             condition_clause = "email"
             condition_val = email
 
+        #added fields for email verification #last_verification_sent #is_verified
+
         sql = f"""
             SELECT user_id, user_name, email, phone, age, address, first_name, last_name,
-                location, profile, pfp, is_admin, is_banned, create_time, modify_time
+                location, profile, pfp, is_admin, is_banned, is_verified, last_verification_sent,
+                create_time, modify_time
             FROM {self.name}
             WHERE {condition_clause}=?;
         """
+
         res = self._execute_sql(sql, [condition_val, ])
         if not res[0]:
             return res

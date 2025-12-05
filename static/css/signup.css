@@ -38,6 +38,26 @@ body {
   border: 1px solid #f3ece8;
 }
 
+.password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .password-wrapper input {
+      flex: 1;
+      padding-right: 40px;
+    }
+
+    .toggle-btn {
+      position: absolute;
+      right: 10px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+    
 .signup-btn {
   background: #f5821f;
   color: #fff;

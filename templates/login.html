@@ -34,20 +34,40 @@
           />
         </div>
 
-        <div class="form-group">
-          <label>Password</label>
-          <input
-            type="password"
-            name="password"
-            required
-            placeholder="••••••••"
-          />
-        </div>
+    <div class="form-group">
+      <label>Password</label>
+      <div class="password-wrapper">
+        <input
+          type="password"
+          id="password"
+          name="password"
+          required
+          placeholder="••••••••"
+        />
+        <button type="button" id="toggle-password" class="toggle-btn">👁</button>
+      </div>
+    </div>
+
+    <script>
+      const passwordField = document.getElementById('password');
+      const toggleBtn = document.getElementById('toggle-password');
+
+      toggleBtn.addEventListener('click', () => {
+        const type =
+          passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordField.setAttribute('type', type);
+        toggleBtn.textContent = type === 'password' ? '👁' : '🙈';
+      });
+    </script>
 
         <button type="submit" class="login-btn">Log In</button>
 
         <div class="signup-link">
           <a href="/signup">Don't have an account? Sign up</a>
+        </div>
+        
+         <div class="forgot-password">
+          <a href="{{ url_for('forgot_password') }}">Forgot Password?</a>
         </div>
       </form>
     </div>

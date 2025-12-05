@@ -48,11 +48,31 @@
           <small id="email-status"></small>
         </div>
 
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="password" name="password" required />
-          <small id="pw-strength"></small>
-        </div>
+    <div class="form-group">
+        <label>Password</label>
+    <div class="password-wrapper">
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            placeholder="password"
+          />
+        <button type="button" id="toggle-password" class="toggle-btn">👁</button>
+      </div>
+    </div>
+
+    <script>
+      const passwordField = document.getElementById('password');
+      const toggleBtn = document.getElementById('toggle-password');
+
+      toggleBtn.addEventListener('click', () => {
+        const type =
+          passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordField.setAttribute('type', type);
+        toggleBtn.textContent = type === 'password' ? '👁' : '🙈';
+      });
+    </script>
 
         <button type="submit" class="signup-btn">Sign Up</button>
 
