@@ -54,9 +54,13 @@ def init_db(db_path):
         """
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'candidate',
+            verified INTEGER,
             is_banned INTEGER NOT NULL DEFAULT 0,
             banned_until TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -330,7 +334,7 @@ def create_job(db_path, employer_id, title, description, location_text=None, lat
     cur.execute(
         """INSERT INTO jobs
            (employer_id, title, description, location_text, lat, lng, salary, tags, availability, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (employer_id, title, description, location_text, lat, lng, salary, tags, availability, datetime.utcnow().isoformat()),
     )
     conn.commit()
@@ -382,7 +386,7 @@ def delete_job(db_path, job_id):
 def get_jobs(db_path, limit=None):
     conn = get_connection(db_path)
     cur = conn.cursor()
-    sql = "SELECT id, employer_id, title, description, location_text, lat, lng, salary, tags, created_at FROM jobs ORDER BY created_at DESC"
+    sql = "SELECT id, employer_id, title, description, location_text, lat, lng, salary, tags, availability, created_at FROM jobs ORDER BY created_at DESC"
     if limit:
         sql += " LIMIT ?"
         cur.execute(sql, (limit,))
@@ -395,7 +399,7 @@ def get_jobs(db_path, limit=None):
 def get_job_by_id(db_path, job_id):
     conn = get_connection(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT id, employer_id, title, description, location_text, lat, lng, salary, tags, created_at FROM jobs WHERE id = ?", (job_id,))
+    cur.execute("SELECT id, employer_id, title, description, location_text, lat, lng, salary, tags, availability, created_at FROM jobs WHERE id = ?", (job_id,))
     row = cur.fetchone()
     conn.close()
     return row
@@ -404,7 +408,7 @@ def get_jobs_by_employer(db_path, employer_id):
     conn = get_connection(db_path)
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, employer_id, title, description, location_text, lat, lng, salary, tags, created_at FROM jobs WHERE employer_id = ? ORDER BY created_at DESC",
+        "SELECT id, employer_id, title, description, location_text, lat, lng, salary, tags, availability, created_at FROM jobs WHERE employer_id = ? ORDER BY created_at DESC",
         (employer_id,),
     )
     rows = cur.fetchall()

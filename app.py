@@ -1863,6 +1863,7 @@ def edit_job(job_id):
         if not title or not description:
             flash("Title and description are required.", "danger")
             return render_template("edit_job.html", job=job)
+        print(request.form)
         try:
             updated = update_job(
                 app.config["DATABASE"],
