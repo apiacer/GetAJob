@@ -28,7 +28,7 @@ body{
 .container{ max-width:1150px; margin:0 auto; padding:0 28px; }
 
 /* header */
-.site-header{ position:sticky; top:0; background:transparent; z-index:100; padding:18px 0; }
+.site-header{ position:sticky; top:0; background:rgba(255,255,255,0.9); z-index:100; padding:18px 0; }
 .header-inner{ display:flex; align-items:center; gap:16px; height:var(--nav-height); }
 .left-area{ display:flex; align-items:center; gap:14px; }
 
