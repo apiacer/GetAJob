@@ -77,6 +77,7 @@ def init_db(db_path):
             lng REAL,
             salary TEXT,
             tags TEXT,
+            availability TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (employer_id) REFERENCES users(id)
         )
@@ -323,21 +324,21 @@ def purge_expired_tokens(db_path):
     conn.close()
 
 # Jobs
-def create_job(db_path, employer_id, title, description, location_text=None, lat=None, lng=None, salary="", tags=None):
+def create_job(db_path, employer_id, title, description, location_text=None, lat=None, lng=None, salary="", tags=None, availability="Any"):
     conn = get_connection(db_path)
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO jobs
-           (employer_id, title, description, location_text, lat, lng, salary, tags, created_at)
+           (employer_id, title, description, location_text, lat, lng, salary, tags, availability, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (employer_id, title, description, location_text, lat, lng, salary, tags, datetime.utcnow().isoformat()),
+        (employer_id, title, description, location_text, lat, lng, salary, tags, availability, datetime.utcnow().isoformat()),
     )
     conn.commit()
     job_id = cur.lastrowid
     conn.close()
     return get_job_by_id(db_path, job_id)
 
-def update_job(db_path, job_id, title=None, description=None, location_text=None, lat=None, lng=None, salary=None, tags=None):
+def update_job(db_path, job_id, title=None, description=None, location_text=None, lat=None, lng=None, salary=None, tags=None, availability=None):
     conn = get_connection(db_path)
     cur = conn.cursor()
     fields = []
@@ -356,6 +357,8 @@ def update_job(db_path, job_id, title=None, description=None, location_text=None
         fields.append("salary = ?"); params.append(salary)
     if tags is not None:
         fields.append("tags = ?"); params.append(tags)
+    if availability is not None:
+        fields.append("availability = ?"); params.append(availability)
     if not fields:
         conn.close()
         return get_job_by_id(db_path, job_id)

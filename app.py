@@ -1066,6 +1066,8 @@ def jobs_list():
     lng = request.args.get("lng")
     center_lat = None
     center_lng = None
+    availability = (request.args.get("availability") or 0)
+
     try:
         if lat is not None and lng is not None and lat != "" and lng != "":
             center_lat = float(lat)
@@ -1143,6 +1145,7 @@ def jobs_list():
         lat=center_lat,
         lng=center_lng,
         radius_miles=radius_miles,
+        availability=availability,
         sort=sort,
         query_args=query_args,
     )
@@ -1750,6 +1753,7 @@ def post_job():
         location_text = request.form.get("location_text", "").strip() or None
         salary = request.form.get("salary", "").strip() or ""
         tags = request.form.get("tags", "").strip() or None
+        availability = request.form.get("availability", "").strip()
 
         lat_val = None
         lng_val = None
@@ -1772,7 +1776,7 @@ def post_job():
 
         if not title or not description:
             flash("Title and description are required.", "danger")
-            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field)
+            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field, availability=availability)
 
         employer_id = int(current_user.get_id())
         try:
@@ -1786,13 +1790,14 @@ def post_job():
                 lng=lng_val,
                 salary=salary,
                 tags=tags,
+                availability=availability,
             )
             flash("Job posted.", "success")
             return redirect(url_for("client_dashboard"))
         except Exception as e:
             app.logger.exception("Failed to create job: %s", e)
             flash("Unable to create job.", "danger")
-            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field)
+            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field, availability=availability)
 
     return render_template("post_job.html")
 
@@ -1841,6 +1846,7 @@ def edit_job(job_id):
         lng_val = None
         lat_field = request.form.get("lat")
         lng_field = request.form.get("lng")
+        availability = request.form.get("availability", "").strip()
         try:
             if lat_field:
                 lat_val = float(lat_field)
@@ -1868,6 +1874,7 @@ def edit_job(job_id):
                 lng=lng_val,
                 salary=salary,
                 tags=tags,
+                availability=availability,
             )
             flash("Job updated.", "success")
             return redirect(url_for("job_detail", job_id=job_id))
