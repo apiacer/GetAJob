@@ -1,6 +1,7 @@
 :root{
   --primary:#d86f2a;
   --primary-800:#b85a22;
+  --secondary: #f0aa7b;
   --muted:#6b6b6b;
   --text:#222;
   --bg:#ffffff;
@@ -72,6 +73,7 @@ body{
 .btn-primary{ background:linear-gradient(180deg,var(--primary),var(--primary-800)); color:#fff; box-shadow:0 10px 30px rgba(216,111,42,0.18); }
 .btn-primary:hover{ transform: translateY(-3px); box-shadow:0 18px 44px rgba(216,111,42,0.22); }
 .btn-outline{ background:transparent; border:2px solid var(--primary); color:var(--primary); padding:10px 18px; border-radius:10px; }
+.btn-outline:hover{ background: var(--secondary) ; box-shadow:0 18px 44px rgba(216,111,42,0.22); }
 .btn-ghost{ background:var(--accent-ghost); color:var(--primary); border:1px solid rgba(0,0,0,0.06); padding:10px 16px; border-radius:10px; }
 .btn-linkish{ background:var(--primary); color:#fff; border-radius:10px; padding:8px 16px; }
 
