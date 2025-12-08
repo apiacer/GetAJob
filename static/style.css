@@ -1,7 +1,7 @@
 :root{
   --primary:#d86f2a;
   --primary-800:#b85a22;
-  --secondary: #f0aa7b;
+  --secondary: #ffeee3;
   --muted:#6b6b6b;
   --text:#222;
   --bg:#ffffff;
@@ -72,8 +72,8 @@ body{
 .btn{ display:inline-flex; align-items:center; justify-content:center; padding:10px 18px; border-radius:10px; cursor:pointer; border:0; font-weight:600; font-size:0.98rem; transition: transform .14s ease, box-shadow .14s ease, background-color .12s ease; }
 .btn-primary{ background:linear-gradient(180deg,var(--primary),var(--primary-800)); color:#fff; box-shadow:0 10px 30px rgba(216,111,42,0.18); }
 .btn-primary:hover{ transform: translateY(-3px); box-shadow:0 18px 44px rgba(216,111,42,0.22); }
-.btn-outline{ background:transparent; border:2px solid var(--primary); color:var(--primary); padding:10px 18px; border-radius:10px; }
-.btn-outline:hover{ background: var(--secondary) ; box-shadow:0 18px 44px rgba(216,111,42,0.22); }
+.btn-outline{ background:transparent; border:2px solid var(--primary); color:var(--primary); padding:10px 18px; border-radius:10px; transition: background-color 0.12s}
+.btn-outline:hover{ background:var(--secondary);}
 .btn-ghost{ background:var(--accent-ghost); color:var(--primary); border:1px solid rgba(0,0,0,0.06); padding:10px 16px; border-radius:10px; }
 .btn-linkish{ background:var(--primary); color:#fff; border-radius:10px; padding:8px 16px; }
 
@@ -222,7 +222,7 @@ a.btn:not(.disabled):focus-visible,
 .btn-ghost:not(:disabled):focus-visible,
 .btn-linkish:not(:disabled):hover,
 .btn-linkish:not(:disabled):focus-visible {
-  background-color: #ffffff !important;      /* inner becomes white */
+  /*background-color: #ffffff !important;      /* inner becomes white */
   color: var(--primary) !important;          /* lettering becomes orange */
   border-color: var(--primary) !important;   /* border stays orange (added if missing) */
   border-style: solid !important;
@@ -257,7 +257,6 @@ a.btn.disabled {
   opacity: 0.6;
   cursor: not-allowed;
   filter: none;
-  background-color: initial !important;
   color: initial !important;
   border-color: initial !important;
 }
