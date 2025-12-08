@@ -49,13 +49,12 @@
     <input name="tags" class="input" type="text" value="{{ job.tags or '' }}">
 
     <label style="margin-top:12px;">Availability</label>
-    <input name="availability" class="input" type="text" value="{{ job.availability or '' }}">
-    <!--select id= availability name="availability" class="input" style="width:140px;">
-      <option value="Any" {% if availability=='Any' %}selected{% endif %}>Any</option>
-      <option value="Morning" {% if availability=='Morning' %}selected{% endif %}>Morning</option>
-      <option value="Afternoon" {% if availability=='Afternoon' %}selected{% endif %}>Afternoon</option>
-      <option value="Night" {% if availability=='Night' %}selected{% endif %}>Night</option>
-    </select-->
+    <select name="availability" class="input" style="width:140px;">
+      <option value="Any" {% if job.availability == "Any" %}selected{% endif %}>Any</option>
+      <option value="Morning" {% if job.availability == "Morning" %}selected{% endif %}>Morning</option>
+      <option value="Afternoon" {% if job.availability == "Afternoon" %}selected{% endif %}>Afternoon</option>
+      <option value="Night" {% if job.availability == "Night" %}selected{% endif %}>Night</option>
+    </select>
 
     <div class="form-actions" style="margin-top:14px;">
       <button class="btn btn-primary" type="submit">Save changes</button>

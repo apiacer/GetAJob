@@ -328,7 +328,7 @@ def purge_expired_tokens(db_path):
     conn.close()
 
 # Jobs
-def create_job(db_path, employer_id, title, description, location_text=None, lat=None, lng=None, salary="", tags=None, availability="Any"):
+def create_job(db_path, employer_id, title, description, location_text=None, lat=None, lng=None, salary="", tags=None, availability=""):
     conn = get_connection(db_path)
     cur = conn.cursor()
     cur.execute(
