@@ -1060,8 +1060,8 @@ def jobs_list():
     remote_only = request.args.get("remote", "").lower() in ("1", "true", "yes", "on")
     page = max(int(request.args.get("page", 1)), 1)
     per_page = max(min(int(request.args.get("per_page", 20)), 100), 1)
-    sort = (request.args.get("sort") or "date").lower()
-    availability = (request.args.get("availability") or "Any")
+    sort = (request.args.get("sort"))
+    availability = (request.args.get("availability"))
 
     lat = request.args.get("lat")
     lng = request.args.get("lng")
