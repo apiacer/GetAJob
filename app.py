@@ -1061,12 +1061,13 @@ def jobs_list():
     page = max(int(request.args.get("page", 1)), 1)
     per_page = max(min(int(request.args.get("per_page", 20)), 100), 1)
     sort = (request.args.get("sort") or "date").lower()
+    availability = (request.args.get("availability") or "Any")
 
     lat = request.args.get("lat")
     lng = request.args.get("lng")
     center_lat = None
     center_lng = None
-    availability = (request.args.get("availability") or 0)
+    
 
     try:
         if lat is not None and lng is not None and lat != "" and lng != "":
