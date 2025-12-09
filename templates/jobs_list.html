@@ -11,15 +11,15 @@
     <input type="hidden" id="latInput" name="lat" value="{{ lat or '' }}">
     <input type="hidden" id="lngInput" name="lng" value="{{ lng or '' }}">
     <input type="number" name="radius_miles" placeholder="Radius (miles)" class="input" style="width:140px;" value="{{ radius_miles or '' }}">
-    <select name="availability" class="input" style="width:140px;">
-      <option value="Any" disabled hidden selected>Availability</option>
+    <select name="availability" class="input" style="width:160px;">
+      <option value="Any" disabled hidden selected>Availability (Any)</option>
       <option value="Any" {% if availability=="Any" %}selected{% endif %}>Any</option>
       <option value="Morning" {% if availability=="Morning" %}selected{% endif %}>Morning</option>
       <option value="Afternoon" {% if availability=="Afternoon" %}selected{% endif %}>Afternoon</option>
       <option value="Night" {% if availability=="Night" %}selected{% endif %}>Night</option>
     </select>
     <select name="sort" class="input" style="width:140px;">
-      <option value="distance" disabled hidden selected>Sort By</option>
+      <option value="distance" disabled hidden selected>Sort (Distance)</option>
       <option value="distance" {% if sort=="distance" %}selected{% endif %}>Distance</option>
       <option value="date" {% if sort=='date' %}selected{% endif %}>Newest</option>
     </select>

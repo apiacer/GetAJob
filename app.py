@@ -1104,6 +1104,13 @@ def jobs_list():
             if "remote" not in job_tags:
                 continue
 
+        if availability:
+            matching = availability == j.get("availability")
+            any = availability == "Any"
+            valid = matching or any
+            if not valid:
+                continue
+
         jlat = j.get("lat")
         jlng = j.get("lng")
         if center_lat is not None and jlat is not None and jlng is not None and jlat != "" and jlng != "":
