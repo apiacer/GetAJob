@@ -1138,6 +1138,10 @@ def jobs_list():
     start = (page - 1) * per_page
     end = start + per_page
     page_jobs = filtered[start:end]
+    if(page == total_pages):
+        viewed = page * per_page
+    else:
+        viewed = page * (per_page - 1) + len(page_jobs)
 
     query_args = dict(request.args)
     query_args.pop("page", None)
@@ -1149,6 +1153,7 @@ def jobs_list():
         total_pages=total_pages,
         page=page,
         per_page=per_page,
+        viewed=viewed,
         q=request.args.get("q", ""),
         tags=request.args.get("tags", ""),
         remote=remote_only,
