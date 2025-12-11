@@ -211,37 +211,148 @@
     mapEl.appendChild(img);
   }
 
-  function initMapOnce() {
-    // If Leaflet missing, show overlay and bail
-    if (!window.L || !window.L.map) {
-      console.warn('Leaflet not available');
-      showOverlay('Map library not loaded');
-      // Also try to display a static fallback so the UI isn't blank
-      showStaticFallback(currentCenter.lat, currentCenter.lng, 4);
-      return;
+function initMapOnce() {
+  // If Leaflet missing, show overlay and bail
+  if (!window.L || !window.L.map) {
+    console.warn('Leaflet not available');
+    showOverlay('Map library not loaded');
+    showStaticFallback(currentCenter.lat, currentCenter.lng, 4);
+    return;
+  }
+  if (window.__jobs_map_inited) return;
+  window.__jobs_map_inited = true;
+
+  // Get map element
+  const mapEl = document.getElementById('map');
+  
+  // DEBUG: Check what's happening
+  console.log('Initial map state:', {
+    offsetHeight: mapEl.offsetHeight,
+    scrollHeight: mapEl.scrollHeight,
+    clientHeight: mapEl.clientHeight,
+    parentHeight: mapEl.parentElement?.offsetHeight
+  });
+
+  // CRITICAL: Clean up any existing Leaflet debris
+  mapEl.innerHTML = '<div id="mapOverlay" class="hidden">Loading map…</div>';
+  mapEl.style.cssText = `
+    position: relative;
+    flex: 1;
+    min-height: 400px;
+    height: 500px;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.06);
+    background: #f3f5f7;
+    overflow: hidden;
+    z-index: 0;
+  `;
+
+  // Create map with FIXED viewport
+  map = L.map('map', {
+    preferCanvas: true,
+    // CRITICAL: Set exact bounds
+    maxBounds: L.latLngBounds(
+      L.latLng(-85, -180),
+      L.latLng(85, 180)
+    ),
+    maxBoundsViscosity: 1.0,
+    worldCopyJump: false,
+    // Start at reasonable zoom
+    zoom: 10,
+    center: [currentCenter.lat, currentCenter.lng],
+    // Performance & containment
+    fadeAnimation: false,
+    zoomAnimation: false,
+    markerZoomAnimation: false,
+    // Prevent tile miscalculation
+    zoomSnap: 0,
+    zoomDelta: 0.5,
+    inertia: false
+  });
+
+  // Force map size BEFORE adding tiles
+  setTimeout(() => {
+    if (map) {
+      map.invalidateSize(true);
+      
+      // DEBUG: Check map size
+      const size = map.getSize();
+      console.log('Map pixel size:', size);
+      
+      // If size is insane, fix it
+      if (size.y > 1000) {
+        console.error('Map has insane height:', size.y, 'fixing...');
+        map.getContainer().style.height = '500px';
+        map.getContainer().parentElement.style.height = '500px';
+        map.invalidateSize(true);
+      }
     }
-    if (window.__jobs_map_inited) return;
-    window.__jobs_map_inited = true;
+  }, 100);
 
-    // create the map (use preferCanvas to reduce DOM pressure)
-    map = L.map('map', { preferCanvas: true }).setView([currentCenter.lat, currentCenter.lng], 5);
+  // Tile layer with EXPLICIT limits
+  const tileUrl = '{{ TILE_URL|default("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png") }}';
+  const tileAttr = '{{ TILE_ATTRIBUTION|default("&copy; OpenStreetMap contributors & CARTO")|e }}';
+  
+  const tileOpts = {
+    attribution: tileAttr,
+    maxZoom: 18,
+    minZoom: 3,
+    bounds: [[-85, -180], [85, 180]],
+    noWrap: true,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: 1,
+    crossOrigin: true,
+    reuseTiles: true,
+    tileSize: 256,
+    zoomOffset: 0,
+    // CRITICAL: Prevent tile retries
+    errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+  };
 
-    // Use configured tile provider if provided by Flask context, otherwise default OSM
-    const tileUrl = '{{ TILE_URL|default("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") }}';
-    const tileAttr = '{{ TILE_ATTRIBUTION|default("&copy; OpenStreetMap contributors")|e }}';
+  const primaryTiles = L.tileLayer(tileUrl, tileOpts).addTo(map);
 
-    const tileOpts = {
-      attribution: tileAttr,
-      maxZoom: 19,
-      detectRetina: false,
-      updateWhenIdle: true,      // reduce requests while dragging/zooming
-      updateWhenZooming: false,
-      keepBuffer: 2
-    };
+  // CRITICAL: Monkey-patch Leaflet to prevent infinite height
+  const originalSetPosition = L.GridLayer.prototype._setPosition;
+  L.GridLayer.prototype._setPosition = function() {
+    const container = this._container;
+    if (container) {
+      // Limit tile container height
+      container.style.maxHeight = '500px';
+      container.style.height = '100%';
+      container.style.overflow = 'hidden';
+    }
+    return originalSetPosition.call(this);
+  };
 
-    // Primary (configured) tiles
-    const primaryTiles = L.tileLayer(tileUrl, tileOpts).addTo(map);
+  // Monitor and fix tile positions
+  primaryTiles.on('tileload', function(e) {
+    const tile = e.tile;
+    if (tile) {
+      // Ensure tile has sane positioning
+      tile.style.position = 'absolute';
+      tile.style.maxHeight = '256px';
+      tile.style.maxWidth = '256px';
+    }
+  });
 
+  // Debug: Log any insane tile positions
+  setInterval(() => {
+    const tiles = document.querySelectorAll('.leaflet-tile');
+    tiles.forEach((tile, i) => {
+      const rect = tile.getBoundingClientRect();
+      if (rect.top > 1000 || rect.left > 1000) {
+        console.warn(`Tile ${i} at insane position:`, rect.top, rect.left);
+        tile.style.top = '0px';
+        tile.style.left = '0px';
+      }
+    });
+  }, 2000);
+
+  // Rest of your existing code (markersLayer, userMarker, event listeners, etc.)...
+  // Keep everything after the tile layer setup...
+  
     // Fallback tiles (CartoCDN)
     const fallbackUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
     const fallbackOpts = { attribution: '&copy; OpenStreetMap contributors & CartoDB', maxZoom: 19 };
@@ -381,7 +492,7 @@
       }
     })();
   }
-
+  
   async function locateAndApply() {
     const ok = await tryBrowserGeolocation();
     if (!ok) {
