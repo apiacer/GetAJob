@@ -67,9 +67,19 @@
 
   <div class=card style="align-items:center">
     <div style="display:grid; grid-template-columns:1fr 5fr 1fr; place-items:center;">
-      <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page-1) }}">Prev</a>
+      {% if page != 1 %}
+        <a class="btn btn-outline" href="{{ url_for('jobs_list', q=q, tags=tags, page=page-1) }}">Prev</a>
+      {% else %}
+        <div></div>
+      {% endif %}
+
       <div>Page {{ page }} of {{ total_pages }}</div>
-      <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page+1) }}">Next</a>
+
+      {% if page != total_pages %}
+        <a class="btn btn-outline" href="{{ url_for('jobs_list', q=q, tags=tags, page=page+1) }}">Next</a>
+      {% else %}
+        <div></div>
+      {% endif %}
     </div>
   </div>
 
