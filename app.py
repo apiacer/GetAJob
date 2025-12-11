@@ -1058,7 +1058,7 @@ def jobs_list():
     q = (request.args.get("q") or "").strip().lower()
     tags_q = (request.args.get("tags") or "").strip().lower()
     remote_only = request.args.get("remote", "").lower() in ("1", "true", "yes", "on")
-    per_page = max(min(int(request.args.get("per_page", 10)), 100), 1)
+    per_page = max(min(int(request.args.get("per_page", 5)), 100), 1)
     sort = (request.args.get("sort"))
     availability = (request.args.get("availability"))
 
