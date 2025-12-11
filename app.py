@@ -1059,7 +1059,7 @@ def jobs_list():
     tags_q = (request.args.get("tags") or "").strip().lower()
     remote_only = request.args.get("remote", "").lower() in ("1", "true", "yes", "on")
     page = max(int(request.args.get("page", 1)), 1)
-    per_page = max(min(int(request.args.get("per_page", 20)), 100), 1)
+    per_page = max(min(int(request.args.get("per_page", 1)), 100), 1)
     sort = (request.args.get("sort"))
     availability = (request.args.get("availability"))
 
@@ -1134,6 +1134,7 @@ def jobs_list():
         filtered.sort(key=lambda x: x.get("created_at") or "", reverse=True)
 
     total = len(filtered)
+    total_pages = total / per_page
     start = (page - 1) * per_page
     end = start + per_page
     page_jobs = filtered[start:end]
@@ -1145,6 +1146,7 @@ def jobs_list():
         "jobs_list.html",
         jobs=page_jobs,
         total=total,
+        total_pages=total_pages,
         page=page,
         per_page=per_page,
         q=request.args.get("q", ""),
