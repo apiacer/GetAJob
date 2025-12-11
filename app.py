@@ -1059,7 +1059,8 @@ def jobs_list():
     tags_q = (request.args.get("tags") or "").strip().lower()
     remote_only = request.args.get("remote", "").lower() in ("1", "true", "yes", "on")
     per_page = max(min(int(request.args.get("per_page", 5)), 100), 1)
-    sort = (request.args.get("sort").strip())
+    sort = (request.args.get("sort", "distance").strip())
+    sort1 = sort.strip()
     availability = (request.args.get("availability"))
 
     lat = request.args.get("lat")
@@ -1127,8 +1128,8 @@ def jobs_list():
 
         filtered.append(j)
 
-    print("the sort is",sort.strip(), " and the availability is ", availability)
-    if sort.strip() == "distance" and center_lat is not None:
+    print("the sort is",sort1, " and the availability is ", availability, "and center_lat is ", center_lat)
+    if "distance" in sort:
         filtered.sort(key=lambda x: (x.get("_distance_miles") is None, x.get("_distance_miles") or 99999))
     else:
         filtered.sort(key=lambda x: x.get("created_at") or "", reverse=True)
