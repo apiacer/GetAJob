@@ -64,6 +64,14 @@
       </div>
     </li>
   {% endfor %}
-  <div>{{ page }} {{ total / per_page }} {{ total_pages }}</div>
+
+  <div class=card style="align-items:center">
+    <div style="display:grid; grid-template-columns:1fr 5fr 1fr; place-items:center;">
+      <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page-1) }}">Prev</a>
+      <div>Page {{ page }} of {{ total_pages }}</div>
+      <a href="{{ url_for('jobs_list', q=q, tags=tags, page=page+1) }}">Next</a>
+    </div>
+  </div>
+
 </ul>
 {% endblock %}
