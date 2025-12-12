@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 from flask import send_from_directory, abort
-
+from flask_mail import Mail, Message
+from flask import url_for
+from dotenv import load_dotenv
+load_dotenv()
 
 import requests
 from flask import (
@@ -73,6 +76,16 @@ app.config["SECRET_KEY"] = os.environ.get(
     "FLASK_SECRET_KEY", "change-me-to-a-random-secret"
 )
 app.config["DATABASE"] = DB_PATH
+
+# Mail / Mailtrap config
+app.config["MAIL_SERVER"] = 'smtp.gmail.com'
+app.config["MAIL_PORT"] = 587
+app.config["MAIL_USERNAME"] = 'getajobnoreply@gmail.com'
+app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD")
+app.config["MAIL_USE_TLS"] = True
+app.config["MAIL_DEFAULT_SENDER"] = ("GetAJob", "getajobnoreply@gmail.com")
+
+mail = Mail(app)
 
 # Email / token configuration
 app.config["EMAIL_MODE"] = os.environ.get("EMAIL_MODE", "console")  # 'console' or 'smtp'
@@ -182,45 +195,53 @@ def require_roles(*roles):
 
     return decorator
 
-
-# --- email helper (console or SMTP) ---
-def send_email(subject, recipient, html_body=None, text_body=None):
-    mode = app.config.get("EMAIL_MODE", "console")
-    if mode == "smtp" and app.config.get("MAIL_HOST"):
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = app.config.get("MAIL_FROM")
-        msg["To"] = recipient
-        if html_body:
-            msg.add_alternative(html_body, subtype="html")
-            if text_body:
-                msg.set_content(text_body)
-        else:
-            msg.set_content(text_body or subject)
-        try:
-            server = smtplib.SMTP(app.config.get("MAIL_HOST"), app.config.get("MAIL_PORT"))
-            server.starttls()
-            if app.config.get("MAIL_USER"):
-                server.login(app.config.get("MAIL_USER"), app.config.get("MAIL_PASS"))
-            server.send_message(msg)
-            server.quit()
-            app.logger.info("Sent email to %s via SMTP", recipient)
-            return True
-        except Exception as e:
-            app.logger.exception("Failed to send email via SMTP: %s", e)
-            return False
+#  email sending helper 
+def send_verification_email(user, token):
+    user_email = user["email"]
+    
+    #get user name, if not use something else
+    if user.get("first_name"):
+        user_name = user["first_name"]
+    elif user.get("username"):
+        user_name = user["username"]
     else:
-        # console mode: print link/information to server console (development)
-        app.logger.info("EMAIL (console mode) -> To: %s Subject: %s\n\n%s\n\n%s", recipient, subject, text_body or "", html_body or "")
-        print("\n--- EMAIL (console mode) ---")
-        print("To:", recipient)
-        print("Subject:", subject)
-        if text_body:
-            print(text_body)
-        if html_body:
-            print(html_body)
-        print("--- END EMAIL ---\n")
-        return True
+        user_name = "there"
+
+    verify_url = url_for("verify_email", token=token, _external=True)
+
+    subject = "Verify your GetAJob account"
+    body = f"""Hi {user_name},
+
+    Welcome to GetAJob! This is totally not a scam! Please verify your email address by clicking the link below:
+
+    {verify_url}
+
+    If you did not sign up for a GetAJob account, please ignore this email.
+    """
+    msg = Message(subject=subject, recipients=[user_email])
+    msg.body = body
+    msg.html = f"""<p>Hi <strong>{user_name}</strong>,</p>
+    <p>Welcome to GetAJob! This is totally not a scam! Please verify your email address by clicking the link below:</p>
+    <p><a href="{verify_url}">Verify Email</a></p>
+    <p>If you did not sign up for a GetAJob account, please ignore this email.</p>
+    """
+    mail.send(msg)
+
+def send_email(subject, recipient, html_body=None, text_body=None):
+    msg = Message(subject=subject, recipients=[recipient])
+
+    #plain text part
+    if text_body:
+        msg.body = text_body
+    else:
+        msg.body = subject #fallback
+    
+    #html part
+    if html_body:
+        msg.html = html_body
+
+    mail.send(msg)
+    return True
 
 
 # ---- password validator helper ----
@@ -419,7 +440,21 @@ def signup():
         except sqlite3.IntegrityError:
             flash("An account with that email or username already exists.", "warning")
             return render_template("signup.html", email=email, role=role, username=username, first_name=first_name, last_name=last_name)
+        
+        #new email verification flow
+        token = create_token(
+            app.config["DATABASE"],
+            email,
+            purpose="verify",
+            expires_seconds=app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600),
+        )
+        #use Flask-Mail helper
+        send_verification_email(user, token)
 
+        flash("Signup successful. A verification email has been sent. Please verify your email before signing in.", "success")
+        return redirect(url_for("signin"))
+    
+        """
         # send verification email using DB-backed token
         token = create_token(app.config["DATABASE"], email, purpose="verify", expires_seconds=app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600))
         verify_url = url_for("verify_email", token=token, _external=True)
@@ -428,6 +463,7 @@ def signup():
         send_email("Verify your Jobsite account", email, html_body=html, text_body=text)
         flash("Signup successful. A verification email has been sent. Please verify your email before signing in.", "success")
         return redirect(url_for("signin"))
+        """
 
     return render_template("signup.html")
 

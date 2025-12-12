@@ -46,7 +46,7 @@ __pycache__/
 .venv/
 instance/
 *.sqlite3
-# .env # should add on but temp disabled for convenience
+*.db
 
 # Node / Frontend stuff
 node_modules/
@@ -61,3 +61,13 @@ build/
 
 # test file
 *test*
+
+data.db
+*.db
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+.env
+config.py
