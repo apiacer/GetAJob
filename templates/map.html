@@ -146,6 +146,21 @@
 {% endblock %}
 
 {% block scripts %}
+
+<script>
+  const CIRCLE = {
+  job:      { radius: 7,  color: '#d35400', weight: 2, fillColor: '#e67e22', fillOpacity: 1 },
+  jobHover: {            /* same as job but a bit bolder on hover */ weight: 3, fillOpacity: 1 },
+  me:       { radius: 9,  color: '#0ea5a4', weight: 2, fillColor: '#0ea5a4', fillOpacity: 1 }
+};
+
+L.Icon.Default.mergeOptions({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+});
+</script>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function () {
@@ -360,15 +375,8 @@ function initMapOnce() {
 
     markersLayer = L.layerGroup().addTo(map);
 
-    userMarker = L.circleMarker([currentCenter.lat, currentCenter.lng], {
-      radius: 8,
-      fillColor: getComputedStyle(document.documentElement).getPropertyValue('--primary') || '#0ea5a4',
-      color: '#fff',
-      weight: 2,
-      opacity: 1,
-      fillOpacity: 1,
-    }).addTo(map);
-    userMarker.setStyle({ opacity: 0, fillOpacity: 0 });
+    userMarker = L.circleMarker([currentCenter.lat, currentCenter.lng], CIRCLE.me).addTo(map);
+userMarker.setStyle({ opacity: 0, fillOpacity: 0 }); // hide initially
 
     // controls wiring
     btnLocate.addEventListener('click', locateAndApply);
@@ -605,8 +613,14 @@ function initMapOnce() {
     const jobDetailTemplate = '{{ url_for("job_detail", job_id=0) }}';
 
     jobs.forEach(job => {
-      const lat = job.lat !== null ? Number(job.lat) : null;
-      const lng = job.lng !== null ? Number(job.lng) : null;
+      const toNum = v => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+    };
+          // accept lat/lng, latitude/longitude, lon
+      const lat = toNum(job.lat ?? job.latitude);
+      const lng = toNum(job.lng ?? job.lon ?? job.longitude);
+
       const displayLoc = job.short_location || (job.location_text||'').split(',').slice(0,2).join(', ');
       const popupHtml = '<div><strong>' + escapeHtml(job.title||'') + '</strong>' +
                         '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(displayLoc) + (job.distance_miles ? (' • ' + job.distance_miles + ' mi') : '') + '</div>' +
@@ -615,7 +629,9 @@ function initMapOnce() {
                         '<a href="/messages?other_id=' + encodeURIComponent(job.employer_id) + '">Message Poster</a></div></div>';
       if (lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng) && markersLayer) {
         try {
-          const marker = L.marker([lat, lng]).addTo(markersLayer);
+          const marker =L.circleMarker([lat, lng], {radius:7, color:'#d35400', weight:2, fillColor:'#e67e22', fillOpacity:1})
+  .addTo(markersLayer)
+  .bindPopup(popupHtml);
           marker.bindPopup(popupHtml);
           layers.push(marker);
         } catch (e) {
