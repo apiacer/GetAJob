@@ -60,4 +60,13 @@ build/
 .vscode/
 
 # test file
-*test*
+*test*.venv/
+__pycache__/
+*.pyc
+uploads/
+data.db
+.venv/
+__pycache__/
+*.pyc
+uploads/
+data.db
