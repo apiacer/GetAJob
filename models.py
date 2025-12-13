@@ -47,6 +47,7 @@ def init_db(db_path):
         os.makedirs(db_dir, exist_ok=True)
 
     conn = get_connection(db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
 
     # Create tables if missing (CREATE TABLE IF NOT EXISTS)
     _ensure_table(
@@ -151,6 +152,7 @@ def init_db(db_path):
 def create_user(db_path, email, password_hash, role="candidate", username=None, first_name=None, last_name=None, verified=0):
     conn = get_connection(db_path)
     cur = conn.cursor()
+    
     cur.execute(
         """INSERT INTO users
            (email,password_hash,role,username,first_name,last_name,verified,created_at)
