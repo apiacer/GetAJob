@@ -5,6 +5,7 @@
 {% block head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
+  
   /* Map page layout */
   .map-card {
     max-width:1100px;
@@ -103,6 +104,9 @@
     .sidebar { width:100%; max-width:100%; }
     #map { height:420px; min-height:360px; }
   }
+  /* Cursor pointer for interactive elements on the map */
+  #map .leaflet-interactive { cursor: pointer; }
+
 </style>
 {% endblock %}
 
@@ -147,24 +151,28 @@
 
 {% block scripts %}
 
+<!-- load Leaflet first -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
   const CIRCLE = {
-  job:      { radius: 7,  color: '#d35400', weight: 2, fillColor: '#e67e22', fillOpacity: 1 },
-  jobHover: {            /* same as job but a bit bolder on hover */ weight: 3, fillOpacity: 1 },
-  me:       { radius: 9,  color: '#0ea5a4', weight: 2, fillColor: '#0ea5a4', fillOpacity: 1 }
-};
+    job:      { radius: 7,  color: '#d35400', weight: 2, fillColor: '#e67e22', fillOpacity: 1 },
+    jobHover: {            weight: 3, fillOpacity: 1 },
+    me:       { radius: 9,  color: '#0ea5a4', weight: 2, fillColor: '#0ea5a4', fillOpacity: 1 }
+  };
 
-L.Icon.Default.mergeOptions({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-});
+  // safe guard in case CDN hiccups
+  if (window.L?.Icon?.Default) {
+    L.Icon.Default.mergeOptions({
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+    });
+  }
 </script>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function () {
-  // Helper: escape HTML for popup content
+  // Helper: escape HTML for tooltip/list content
   function escapeHtml(s) {
     if (s === null || s === undefined) return '';
     return String(s).replace(/[&<>"']/g, function (m) {
@@ -182,6 +190,7 @@ L.Icon.Default.mergeOptions({
   const mapOverlay = document.getElementById('mapOverlay');
 
   let map, markersLayer, userMarker, radiusCircle;
+  let radiusRenderer, jobsRenderer;
   let currentCenter = { lat: 39.8283, lng: -98.5795 }; // default US center
   let currentRadius = Number(radiusSelect.value) || 10; // miles
 
@@ -285,6 +294,12 @@ function initMapOnce() {
     zoomDelta: 0.5,
     inertia: false
   });
+  map.createPane('radiusPane');
+  map.getPane('radiusPane').style.zIndex = 350;
+  map.createPane('jobsPane');
+  map.getPane('jobsPane').style.zIndex = 450;
+  radiusRenderer = L.canvas({ pane: 'radiusPane' });
+  jobsRenderer   = L.canvas({ pane: 'jobsPane' });
 
   // Force map size BEFORE adding tiles
   setTimeout(() => {
@@ -539,7 +554,17 @@ userMarker.setStyle({ opacity: 0, fillOpacity: 0 }); // hide initially
     if (show) {
       userMarker.setStyle({ opacity: 1, fillOpacity: 1 });
       if (radiusCircle) map.removeLayer(radiusCircle);
-      radiusCircle = L.circle([lat, lng], { radius: (currentRadius || 10) * 1609.344, color: '#0077ff', opacity: 0.12, weight: 1, fillOpacity: 0.04 }).addTo(map);
+      radiusCircle = L.circle([lat, lng], {
+        radius: (currentRadius || 10) * 1609.344,
+        color: '#0077ff',
+        opacity: 0.12,
+        weight: 1,
+        fillOpacity: 0.04,
+        interactive: false,
+        pane: 'radiusPane',
+        renderer: radiusRenderer
+      }).addTo(map);
+      radiusCircle.on('add', () => radiusCircle.bringToBack());
     } else {
       userMarker.setStyle({ opacity: 0, fillOpacity: 0 });
       if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
@@ -610,43 +635,64 @@ userMarker.setStyle({ opacity: 0, fillOpacity: 0 }); // hide initially
 
     let listHtml = '';
     const layers = [];
-    const jobDetailTemplate = '{{ url_for("job_detail", job_id=0) }}';
-
+// one time, near the top of renderJobsOnMap:
+const jobDetailBase = '{{ url_for("job_detail", job_id=0)[:-1] }}'; // drops the trailing "0"
     jobs.forEach(job => {
       const toNum = v => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-    };
-          // accept lat/lng, latitude/longitude, lon
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+      // accept lat/lng, latitude/longitude, lon
       const lat = toNum(job.lat ?? job.latitude);
       const lng = toNum(job.lng ?? job.lon ?? job.longitude);
 
       const displayLoc = job.short_location || (job.location_text||'').split(',').slice(0,2).join(', ');
-      const popupHtml = '<div><strong>' + escapeHtml(job.title||'') + '</strong>' +
-                        '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(displayLoc) + (job.distance_miles ? (' • ' + job.distance_miles + ' mi') : '') + '</div>' +
-                        '<div style="margin-top:8px;">' + escapeHtml((job.description||'').substring(0,200)) + (job.description && job.description.length > 200 ? '...' : '') + '</div>' +
-                        '<div style="margin-top:6px;"><a href="' + (jobDetailTemplate.replace('/0','/' + encodeURIComponent(job.id))) + '">View job</a> • ' +
-                        '<a href="/messages?other_id=' + encodeURIComponent(job.employer_id) + '">Message Poster</a></div></div>';
+      // Build the job URL robustly (no brittle '/0' replace)
+const jobUrl = jobDetailBase + encodeURIComponent(job.id);
       if (lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng) && markersLayer) {
         try {
-          const marker =L.circleMarker([lat, lng], {radius:7, color:'#d35400', weight:2, fillColor:'#e67e22', fillOpacity:1})
-  .addTo(markersLayer)
-  .bindPopup(popupHtml);
-          marker.bindPopup(popupHtml);
+          const pt = [lat, lng];
+          const marker = L.circleMarker(pt, Object.assign({}, CIRCLE.job, {
+            pane: 'jobsPane',
+            renderer: jobsRenderer
+          }))
+            .addTo(markersLayer)
+            .bindTooltip(escapeHtml(job.title || 'View job'), { direction: 'top', opacity: 0.9, sticky: true });
+
+          marker.on('mouseover', () => marker.setStyle(CIRCLE.jobHover));
+          marker.on('mouseout',  () => marker.setStyle(CIRCLE.job));
+
+          // click => go to job (no popup, no preventDefault)
+          marker.on('click', () => { window.location.href = jobUrl; });
+
+          marker.bringToFront();
           layers.push(marker);
         } catch (e) {
           console.warn('Failed to add marker', e);
         }
       }
-      listHtml += '<a href="' + (jobDetailTemplate.replace('/0','/' + encodeURIComponent(job.id))) + '"><strong>' + escapeHtml(job.title||'') + '</strong>' +
+      listHtml += '<a href="' + jobUrl + '"><strong>' + escapeHtml(job.title||'') + '</strong>' +
                   '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(displayLoc) + (job.distance_miles ? (' • ' + job.distance_miles + ' mi') : '') + '</div></a>';
     });
 
     jobsListEl.innerHTML = '<div class="job-list-mini">' + listHtml + '</div>';
+    if (markersLayer && typeof markersLayer.bringToFront === 'function') {
+      markersLayer.bringToFront();
+    }
 
     if (centerLat !== null && centerLng !== null && map) {
       try {
-        radiusCircle = L.circle([centerLat, centerLng], { radius: (currentRadius || 10) * 1609.344, color: '#0077ff', opacity: 0.12, weight: 1, fillOpacity: 0.04 }).addTo(map);
+        radiusCircle = L.circle([centerLat, centerLng], {
+          radius: (currentRadius || 10) * 1609.344,
+          color: '#0077ff',
+          opacity: 0.12,
+          weight: 1,
+          fillOpacity: 0.04,
+          interactive: false,
+          pane: 'radiusPane',
+          renderer: radiusRenderer
+        }).addTo(map);
+        radiusCircle.on('add', () => radiusCircle.bringToBack());
         map.setView([centerLat, centerLng], 13);
       } catch (e) {}
     } else {
