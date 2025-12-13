@@ -472,7 +472,8 @@ def signup():
         send_verification_email(user, token)
 
         flash("Signup successful. A verification email has been sent. Please verify your email before signing in.", "success")
-        return redirect(url_for("signin"))
+        return redirect(url_for("signin", email=email, from_signup=1))
+
 
     return render_template("signup.html")
 
@@ -537,6 +538,37 @@ def signin():
     if current_user.is_authenticated:
         return redirect(url_for("profile"))
 
+    #Handle GET: show signin form, maybe with countdown
+    if request.method == "GET":
+        email = request.args.get("email", "").strip().lower()
+        from_signup = request.args.get("from_signup")
+        verify_seconds_remaining = None
+
+        if email and from_signup:
+            # only if we came from signup with an email
+            user_row = get_user_by_email(app.config["DATABASE"], email)
+            if user_row and not user_row.get("verified"):
+                info = get_latest_token_for_email(
+                    app.config["DATABASE"], email, purpose="verify"
+                )
+                if info:
+                    expires_at = info.get("expires_at")
+                    if expires_at:
+                        try:
+                            exp_dt = datetime.fromisoformat(expires_at)
+                            delta = exp_dt - datetime.utcnow()
+                            verify_seconds_remaining = max(
+                                0, int(delta.total_seconds())
+                            )
+                        except Exception:
+                            verify_seconds_remaining = None
+
+        return render_template(
+            "signin.html",
+            email=email,
+            verify_seconds_remaining=verify_seconds_remaining,
+        )
+
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -572,12 +604,9 @@ def signin():
 
         # Check verified
         if not user_row.get("verified"):
-            #check for existing unexpired token
             info = get_latest_token_for_email(app.config["DATABASE"], email, purpose="verify")
 
             if info:
-                #token exists and is valid
-                #compute remaining seconds
                 seconds_remaining = None
                 expires_at = info.get("expires_at")
                 if expires_at:
@@ -587,36 +616,32 @@ def signin():
                         seconds_remaining = max(0, int(delta.total_seconds()))
                     except Exception:
                         seconds_remaining = None
-                
+
                 flash("Your email is not verified. Please check your inbox.", "warning")
                 return render_template(
                     "signin.html",
                     email=email,
                     verify_seconds_remaining=seconds_remaining,
                 )
-            
-            #no valid token, create a new one and send
-            ttl = app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600)
 
+            # no valid token, create a new one and send
             token = create_token(
                 app.config["DATABASE"],
                 email,
                 purpose="verify",
-                expires_seconds=ttl,
+                expires_seconds=app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600),
             )
 
             send_verification_email(user_row, token)
 
             flash("Your previous verification link has expired. A new verification email has been sent. Please check your inbox.", "warning")
-            return render_template(
-                "signin.html", 
-                email=email
-            )
-        
+            return render_template("signin.html", email=email)
+
+        # Verified: log them in
         user_obj = User(
             id=user_row["id"],
             email=user_row["email"],
-            role=user_row.get("role", "contractor"),  # default contractor
+            role=user_row.get("role", "contractor"),
             is_banned=user_row.get("is_banned", 0),
             banned_until=user_row.get("banned_until"),
             username=user_row.get("username"),
@@ -628,7 +653,6 @@ def signin():
         flash("Signed in successfully.", "success")
         return redirect(url_for("profile"))
 
-    return render_template("signin.html")
 
 @app.route("/admin/conversation/view")
 @require_roles("admin")
