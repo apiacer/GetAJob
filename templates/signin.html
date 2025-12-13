@@ -6,6 +6,19 @@
 
 <div class="form-card">
   <form method="post" action="{{ url_for('signin') }}">
+
+    {% if verify_seconds_remaining %}
+    <!-- Verification Countdown Box -->
+    <div class="alert alert-info" style="margin-bottom:18px;">
+      Fast link expiry for testing - expires in
+      <span
+        id="verify-countdown"
+        data-remaining="{{ verify_seconds_remaining }}"
+        style="font-weight:bold;"
+      ></span>.
+    </div>
+    {% endif %}
+
     <label for="email">Email</label>
     <input id="email" name="email" class="input" type="email" placeholder="Type Here" required>
 
@@ -26,4 +39,9 @@
 <div style="max-width:720px; margin-top:12px;">
   <a class="btn btn-outline" href="{{ url_for('signup') }}" style="width:100%;">Sign Up Here</a>
 </div>
+
+{% if verify_seconds_remaining %}
+  <!-- Only load the countdown script when there is a token -->
+  <script src="{{ url_for('static', filename='js/verify_timer.js') }}"></script>
+{% endif %}
 {% endblock %}

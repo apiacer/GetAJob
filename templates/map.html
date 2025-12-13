@@ -3,92 +3,17 @@
 {% block title %}Jobs Map — GetAJob{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
 <style>
-  /* ===== ATOMIC CONTAINMENT SOLUTION ===== */
   .map-page-container {
-    max-width: 1200px;
+    max-width: 1150px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 24px 0 40px;
   }
 
-  /* ABSOLUTE CONTAINMENT: This wrapper physically cuts off everything outside */
-  .map-absolute-container {
-    position: relative;
-    width: 100%;
-    height: 600px; /* FIXED - NO GROWING */
-    border: 3px solid #007bff;
-    border-radius: 10px;
-    background: #f8f9fa;
-    margin: 20px 0;
-    
-    /* ATOMIC CONTAINMENT TECHNIQUES */
-    overflow: hidden !important; /* Primary containment */
-    clip-path: inset(0 0 0 0) !important; /* Physical cut-off */
-    contain: strict !important; /* Browser containment */
-    isolation: isolate !important; /* Stacking context */
-    
-    /* Prevent any internal overflow */
-    box-sizing: border-box;
-  }
-
-  /* The map container - becomes a clipping viewport */
-  #map {
-    width: 100% !important;
-    height: 100% !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    
-    /* Force Leaflet to respect boundaries */
-    overflow: hidden !important;
-    clip-path: inset(0 0 0 0) !important;
-    contain: strict !important;
-    
-    /* Create a new stacking context */
-    z-index: 1;
-  }
-
-  /* ===== NUCLEAR LEAFLET OVERRIDES ===== */
-  /* Target ALL Leaflet containers */
-  .leaflet-container,
-  .leaflet-map-pane,
-  .leaflet-tile-pane,
-  .leaflet-overlay-pane,
-  .leaflet-shadow-pane,
-  .leaflet-marker-pane,
-  .leaflet-tooltip-pane,
-  .leaflet-popup-pane {
-    width: 100% !important;
-    height: 100% !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    overflow: hidden !important;
-    clip-path: inset(0 0 0 0) !important;
-    contain: strict !important;
-  }
-
-  /* Nuclear option for tile container */
-  .leaflet-tile-container {
-    position: absolute !important;
-    width: 100% !important;
-    height: 100% !important;
-    overflow: hidden !important;
-    clip-path: inset(0 0 0 0) !important;
-    contain: strict !important;
-  }
-
-  /* Force individual tiles to stay put */
-  .leaflet-tile {
-    position: absolute !important;
-    display: block !important;
-    pointer-events: auto !important;
-    /* Prevent any transformation issues */
-    transform-origin: 0 0 !important;
-  }
-
-  /* ===== LAYOUT ===== */
   .map-layout {
     display: flex;
     gap: 20px;
@@ -101,138 +26,104 @@
   }
 
   .map-sidebar {
-    width: 300px;
+    width: 320px;
     flex-shrink: 0;
   }
-
-  @media (max-width: 768px) {
-    .map-layout {
-      flex-direction: column;
-    }
-    .map-sidebar {
-      width: 100%;
-    }
-    .map-absolute-container {
-      height: 400px;
-    }
-  }
-
-  /* ===== VISUAL DEBUG ===== */
-  /* Show the clipping boundary */
-  .map-boundary-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 9999;
-    border: 2px solid rgba(255, 0, 0, 0.3);
-    border-radius: 8px;
-    box-shadow: inset 0 0 0 1px rgba(0, 123, 255, 0.2);
-  }
-
-  /* ===== CONTROLS ===== */
-  .map-controls {
-    background: white;
-    padding: 15px;
-    border-radius: 8px;
+  
+  #map {
+    width: 100%;
+    border-radius: 12px;
     border: 1px solid #ddd;
-    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+  }
+  .map-controls {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #eee;
+    padding: 10px 12px;
+    margin-bottom: 16px;
     display: flex;
-    gap: 10px;
     flex-wrap: wrap;
+    gap: 8px;
     align-items: center;
   }
 
   .map-controls input,
   .map-controls select {
-    padding: 8px 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
     border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-  }
-
-  .map-controls .btn {
-    padding: 8px 16px;
     font-size: 14px;
   }
 
   #addressInput {
     flex: 1;
-    min-width: 200px;
+    min-width: 180px;
   }
 
   #radiusSelect {
     width: 120px;
   }
 
-  /* ===== JOB LIST ===== */
   .job-list-container {
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 15px;
-    height: 500px;
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #eee;
+    padding: 12px 14px;
+    max-height: 480px;
     overflow-y: auto;
   }
 
-  .job-item {
-    padding: 12px;
-    border-bottom: 1px solid #eee;
+  .job-item-link {
     text-decoration: none;
-    color: #333;
+    color: inherit;
     display: block;
-    transition: background 0.2s;
+    padding: 8px 6px;
+    border-bottom: 1px solid #f1f1f1;
   }
 
-  .job-item:hover {
-    background: #f8f9fa;
-  }
-
-  .job-item:last-child {
+  .job-item-link:last-child {
     border-bottom: none;
   }
 
   .job-title {
     font-weight: 600;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
 
   .job-location {
     font-size: 13px;
     color: #666;
-    margin-bottom: 4px;
   }
 
   .job-distance {
     font-size: 12px;
-    color: #007bff;
+    color: var(--primary);
     font-weight: 500;
   }
 
-  /* ===== LOADING STATES ===== */
   .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: #666;
+    padding: 18px 8px;
+    text-align: center;
+    font-size: 14px;
+    color: #777;
   }
 
-  /* ===== INSTRUCTION OVERLAY ===== */
-  .instruction-overlay {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(255, 255, 255, 0.95);
-    padding: 10px 15px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    z-index: 10000;
-    font-size: 12px;
-    max-width: 200px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  @media (max-width: 900px) {
+    .map-layout {
+      flex-direction: column;
+    }
+    .map-sidebar {
+      width: 100%;
+      max-width: none;
+    }
+    #map {
+      height: 380px;
+    }
+    .job-list-container {
+      max-height: 320px;
+    }
   }
 </style>
 {% endblock %}
@@ -240,11 +131,17 @@
 {% block content %}
 <div class="map-page-container">
   <h1>Jobs Map</h1>
-  <p class="text-muted">Map is strictly contained within the blue border. Tiles cannot escape.</p>
-  
+  <p class="text-muted">
+    Browse jobs on an interactive map. Use your location or search by city / ZIP.
+  </p>
+
   <div class="map-controls">
-    <input type="text" id="addressInput" placeholder="Enter address, city, or ZIP..." class="form-control">
-    <select id="radiusSelect" class="form-control">
+    <input
+      type="text"
+      id="addressInput"
+      placeholder="Enter address, city, or ZIP…"
+    />
+    <select id="radiusSelect">
       <option value="5">5 miles</option>
       <option value="10" selected>10 miles</option>
       <option value="25">25 miles</option>
@@ -252,36 +149,23 @@
       <option value="100">100 miles</option>
       <option value="0">Show all</option>
     </select>
-    <button id="locateBtn" class="btn btn-outline-primary">📍 My Location</button>
-    <button id="searchBtn" class="btn btn-primary">Search</button>
+    <button id="locateBtn" class="btn btn-outline">
+      📍 My Location
+    </button>
+    <button id="searchBtn" class="btn btn-primary">
+      Search
+    </button>
   </div>
 
   <div class="map-layout">
     <div class="map-main">
-      <!-- ATOMIC CONTAINMENT CONTAINER -->
-      <div class="map-absolute-container">
-        <div id="map"></div>
-        <!-- Visual boundary indicator -->
-        <div class="map-boundary-overlay"></div>
-        <!-- Instruction overlay -->
-        <div class="instruction-overlay">
-          <strong>Map Boundary</strong><br>
-          <small>Tiles are physically clipped here</small>
-        </div>
-      </div>
-      <div class="mt-2 text-muted small">
-        <i class="bi bi-info-circle"></i> The blue border shows the exact clipping boundary. Nothing can render outside it.
-      </div>
+      <div id="map"></div>
     </div>
-
     <div class="map-sidebar">
       <div class="job-list-container">
-        <h5>Jobs Nearby <span id="jobCount" class="badge bg-secondary">0</span></h5>
-        <div id="jobsList" class="mt-3">
-          <div class="loading">
-            <div class="spinner-border spinner-border-sm me-2"></div>
-            Loading jobs...
-          </div>
+        <h5 style="margin: 0 0 6px;">Jobs</h5>
+        <div id="jobsList" class="mt-2">
+          <div class="loading">Loading jobs…</div>
         </div>
       </div>
     </div>
@@ -292,255 +176,187 @@
 {% block scripts %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// Configure Leaflet to use CDN images
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-});
+  let map;
+  let jobMarkers;
 
-// Global variables
-let map = null;
-let jobMarkers = null;
-let userLocation = null;
-
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('Initializing ATOMIC CONTAINED map...');
-  initializeAtomicMap();
-});
-
-function initializeAtomicMap() {
-  try {
-    // FIRST: Force container dimensions BEFORE Leaflet
-    const container = document.querySelector('.map-absolute-container');
-    const mapElement = document.getElementById('map');
-    
-    // Enforce fixed dimensions
-    container.style.height = '600px';
-    container.style.width = '100%';
-    container.style.overflow = 'hidden';
-    container.style.clipPath = 'inset(0 0 0 0)';
-    
-    mapElement.style.width = '100%';
-    mapElement.style.height = '100%';
-    mapElement.style.position = 'absolute';
-    mapElement.style.top = '0';
-    mapElement.style.left = '0';
-    mapElement.style.overflow = 'hidden';
-    mapElement.style.clipPath = 'inset(0 0 0 0)';
-    
-    // Clear any existing content
-    mapElement.innerHTML = '';
-    
-    // Create map with MAXIMUM CONTAINMENT settings
-    map = L.map('map', {
-      center: [39.8283, -98.5795],
-      zoom: 4,
-      zoomControl: true,
-      zoomSnap: 0.1,
-      zoomDelta: 0.5,
-      
-      // CRITICAL CONTAINMENT SETTINGS
-      maxBoundsViscosity: 1.0,
-      worldCopyJump: false,
-      bounceAtZoomLimits: false,
-      
-      // Performance/containment
-      fadeAnimation: false,
-      markerZoomAnimation: false,
-      transform3DLimit: 1,
-      wheelDebounceTime: 40,
-      wheelPxPerZoomLevel: 60,
-      
-      // Tile loading control
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      keepBuffer: 0, // ZERO buffer - tiles only in viewport
-      preferCanvas: true
-    });
-    
-    // Set ABSOLUTE bounds - cannot pan beyond
-    const hardBounds = L.latLngBounds(
-      L.latLng(-85, -180),
-      L.latLng(85, 180)
-    );
-    map.setMaxBounds(hardBounds);
-    map.setMinZoom(2);
-    map.setMaxZoom(18);
-    
-    // Add tile layer with STRICT containment
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 18,
-      minZoom: 2,
-      noWrap: true,
-      bounds: hardBounds,
-      updateWhenIdle: true,
-      updateInterval: 250,
-      keepBuffer: 0, // NO buffer tiles
-      tileSize: 256,
-      zoomOffset: 0,
-      detectRetina: false
-    }).addTo(map);
-    
-    // Initialize markers
-    jobMarkers = L.layerGroup().addTo(map);
-    
-    // AFTER map is created, apply CSS containment to all Leaflet panes
-    setTimeout(() => {
-      // Force containment on all Leaflet DOM elements
-      const leafletPanes = document.querySelectorAll('.leaflet-pane');
-      leafletPanes.forEach(pane => {
-        pane.style.overflow = 'hidden';
-        pane.style.clipPath = 'inset(0 0 0 0)';
-        pane.style.contain = 'strict';
-      });
-      
-      // Force containment on tile container
-      const tileContainer = document.querySelector('.leaflet-tile-container');
-      if (tileContainer) {
-        tileContainer.style.overflow = 'hidden';
-        tileContainer.style.clipPath = 'inset(0 0 0 0)';
-        tileContainer.style.contain = 'strict';
-      }
-      
-      // Invalidate size
-      if (map) {
-        map.invalidateSize(true);
-        
-        // Add containment check
-        map.on('move', enforceContainment);
-        map.on('zoom', enforceContainment);
-      }
-    }, 100);
-    
-    // Setup controls
+  document.addEventListener("DOMContentLoaded", () => {
+    initMap();
     setupControls();
-    
-    // Load jobs
     loadAllJobs();
-    
-    console.log('Atomic map initialized with maximum containment');
-    
-  } catch (error) {
-    console.error('Atomic map error:', error);
-    document.getElementById('map').innerHTML = `
-      <div style="padding: 40px; text-align: center; color: #666;">
-        <h4>⚠️ Map Error</h4>
-        <p>${error.message}</p>
-        <button onclick="window.location.reload()" class="btn btn-sm btn-primary mt-2">
-          Reload Page
-        </button>
-      </div>
-    `;
-  }
-}
-
-// ENFORCE CONTAINMENT ON EVERY INTERACTION
-function enforceContainment() {
-  if (!map) return;
-  
-  // Get viewport bounds
-  const bounds = map.getBounds();
-  const size = map.getSize();
-  const zoom = map.getZoom();
-  
-  // Log for debugging
-  console.log(`Viewport: ${size.x}x${size.y}, Zoom: ${zoom}`);
-  
-  // Force re-clip
-  const container = document.querySelector('.map-absolute-container');
-  if (container) {
-    container.style.clipPath = 'inset(0 0 0 0)';
-  }
-  
-  // Force clip on all Leaflet elements
-  document.querySelectorAll('.leaflet-pane, .leaflet-tile-container').forEach(el => {
-    el.style.clipPath = 'inset(0 0 0 0)';
   });
-}
 
-function setupControls() {
-  // Locate button
-  document.getElementById('locateBtn').addEventListener('click', function() {
-    if (navigator.geolocation) {
-      this.disabled = true;
-      this.textContent = 'Locating...';
-      
+  function initMap() {
+    map = L.map("map").setView([37.8, -96.9], 4); // USA-ish
+
+    // Use the TILE_URL + attribution from app.context_processor
+    L.tileLayer("{{ TILE_URL }}", {
+      attribution: "{{ TILE_ATTRIBUTION|safe }}",
+      maxZoom: 19,
+    }).addTo(map);
+
+    jobMarkers = L.layerGroup().addTo(map);
+
+    // make sure it sizes correctly
+    setTimeout(() => map.invalidateSize(), 200);
+  }
+
+  async function loadAllJobs() {
+    const jobsList = document.getElementById("jobsList");
+    jobsList.innerHTML = '<div class="loading">Loading jobs…</div>';
+    try {
+      const res = await fetch("/api/jobs");
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "API error");
+      const jobs = data.jobs || [];
+      renderJobs(jobs);
+      putMarkers(jobs);
+    } catch (err) {
+      console.error(err);
+      jobsList.innerHTML =
+        '<div class="loading">Could not load jobs.</div>';
+    }
+  }
+
+  async function loadNearbyJobs(lat, lng) {
+    const radius = document.getElementById("radiusSelect").value || "10";
+    const jobsList = document.getElementById("jobsList");
+    jobsList.innerHTML = '<div class="loading">Loading nearby jobs…</div>';
+    try {
+      const url = `/api/jobs_nearby?lat=${lat}&lng=${lng}&radius_miles=${radius}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "API error");
+      const jobs = data.jobs || [];
+      renderJobs(jobs);
+      putMarkers(jobs, [lat, lng]);
+    } catch (err) {
+      console.error(err);
+      jobsList.innerHTML =
+        '<div class="loading">Could not load nearby jobs.</div>';
+    }
+  }
+
+  function renderJobs(jobs) {
+    const jobsList = document.getElementById("jobsList");
+    if (!jobs.length) {
+      jobsList.innerHTML =
+        '<div class="loading">No jobs found for this area yet.</div>';
+      return;
+    }
+    jobsList.innerHTML = "";
+    jobs.forEach((job) => {
+      const a = document.createElement("a");
+      a.href = `/job/${job.id}`;
+      a.className = "job-item-link";
+      a.innerHTML = `
+        <div class="job-title">${job.title || "Untitled job"}</div>
+        <div class="job-location">
+          ${job.short_location || job.location_text || "Location not set"}
+        </div>
+        ${
+          job.distance_miles != null
+            ? `<div class="job-distance">${job.distance_miles} miles away</div>`
+            : ""
+        }
+      `;
+      jobsList.appendChild(a);
+    });
+  }
+
+  function putMarkers(jobs, centerOverride) {
+    jobMarkers.clearLayers();
+    const bounds = [];
+
+    jobs.forEach((job) => {
+      if (job.lat == null || job.lng == null) return;
+      const lat = job.lat;
+      const lng = job.lng;
+      const marker = L.marker([lat, lng]);
+      marker.bindPopup(
+        `<strong>${job.title || "Untitled job"}</strong><br/>
+         ${job.short_location || job.location_text || ""}<br/>
+         <a href="/job/${job.id}">View job</a>`
+      );
+      marker.addTo(jobMarkers);
+      bounds.push([lat, lng]);
+    });
+
+    if (centerOverride) {
+      map.setView(centerOverride, 11);
+    } else if (bounds.length) {
+      map.fitBounds(bounds, { padding: [24, 24] });
+    }
+  }
+
+  function setupControls() {
+    // "My Location"
+    document.getElementById("locateBtn").addEventListener("click", () => {
+      const btn = document.getElementById("locateBtn");
+      if (!navigator.geolocation) {
+        alert("Geolocation not supported in this browser.");
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Locating…";
+
       navigator.geolocation.getCurrentPosition(
-        pos => {
+        (pos) => {
+          btn.disabled = false;
+          btn.textContent = "📍 My Location";
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-          userLocation = { lat, lng };
-          
-          this.disabled = false;
-          this.textContent = '📍 My Location';
-          
-          map.setView([lat, lng], 13);
           loadNearbyJobs(lat, lng);
         },
-        err => {
-          alert('Location error: ' + err.message);
-          this.disabled = false;
-          this.textContent = '📍 My Location';
+        (err) => {
+          btn.disabled = false;
+          btn.textContent = "📍 My Location";
+          alert("Error getting location: " + err.message);
         }
       );
-    }
-  });
-  
-  // Search
-  document.getElementById('searchBtn').addEventListener('click', function() {
-    const address = document.getElementById('addressInput').value.trim();
-    if (address) {
-      geocodeAddress(address);
-    } else {
-      const center = map.getCenter();
-      loadNearbyJobs(center.lat, center.lng);
-    }
-  });
-  
-  // Radius
-  document.getElementById('radiusSelect').addEventListener('change', function() {
-    if (userLocation) {
-      loadNearbyJobs(userLocation.lat, userLocation.lng);
-    } else {
-      const center = map.getCenter();
-      loadNearbyJobs(center.lat, center.lng);
-    }
-  });
-}
+    });
 
-// Rest of the functions (geocodeAddress, loadAllJobs, loadNearbyJobs, displayJobs, addMarkers)
-// ... keep the same as before but add enforceContainment() calls
+    // Basic search by address (uses your server geocoder helper via /_client_location? nah)
+    document.getElementById("searchBtn").addEventListener("click", () => {
+      const addr = document.getElementById("addressInput").value.trim();
+      if (!addr) {
+        // fallback to all jobs again
+        loadAllJobs();
+        return;
+      }
+      // cheap client-side geocode using Nominatim
+      geocodeAndCenter(addr);
+    });
 
-async function geocodeAddress(address) {
-  // ... same as before
-}
-
-async function loadAllJobs() {
-  // ... same as before
-}
-
-async function loadNearbyJobs(lat, lng) {
-  // ... same as before
-}
-
-function displayJobs(jobs) {
-  // ... same as before
-}
-
-function addMarkers(jobs) {
-  // ... same as before
-}
-
-// DEBUG: Add CSS containment checker
-setInterval(() => {
-  const container = document.querySelector('.map-absolute-container');
-  if (container) {
-    const rect = container.getBoundingClientRect();
-    console.log('Container bounds:', rect.width, 'x', rect.height);
+    document
+      .getElementById("radiusSelect")
+      .addEventListener("change", () => {
+        const center = map.getCenter();
+        loadNearbyJobs(center.lat, center.lng);
+      });
   }
-}, 5000);
+
+  async function geocodeAndCenter(query) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+        query
+      )}`;
+      const resp = await fetch(url, {
+        headers: { "User-Agent": "GetAJob/1.0 (dev-local)" },
+      });
+      const data = await resp.json();
+      if (!data.length) {
+        alert("Could not find that location.");
+        return;
+      }
+      const item = data[0];
+      const lat = parseFloat(item.lat);
+      const lng = parseFloat(item.lon);
+      map.setView([lat, lng], 12);
+      loadNearbyJobs(lat, lng);
+    } catch (e) {
+      console.error(e);
+      alert("Error looking up that location.");
+    }
+  }
 </script>
 {% endblock %}

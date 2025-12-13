@@ -323,6 +323,45 @@ def get_token_info(db_path, token, purpose):
         return None
     return row
 
+#adding for email verification flow
+def get_latest_token_for_email(db_path, email, purpose):
+    """
+    Returns the most recent token for the given email and purpose, 
+    or None if not found or expired.
+
+    """
+    conn = get_connection(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT token, email, purpose, expires_at, created_at
+        FROM tokens
+        WHERE email = ? AND purpose = ?
+        ORDER BY datetime(created_at) DESC
+        LIMIT 1
+        """,
+        (email, purpose),
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+    
+    #row is already a dict because of row_factory
+    expires_at = row.get("expires_at")
+    try:
+        if expires_at:
+            exp_dt = datetime.fromisoformat(expires_at)
+            if exp_dt < datetime.utcnow():
+                #treat as not found if expired
+                return None
+    except Exception:
+        #bad data, treat as not found
+        return None
+    
+    return row
+
 def purge_expired_tokens(db_path):
     conn = get_connection(db_path)
     cur = conn.cursor()
