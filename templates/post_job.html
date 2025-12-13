@@ -49,14 +49,6 @@
     <label style="margin-top:12px;">Tags (comma separated)</label>
     <input name="tags" class="input" type="text" value="{{ tags or '' }}" placeholder="e.g. remote,python">
 
-    <label style="margin-top:12px;">Availability</label>
-    <select name="availability" class="input" style="width:140px;">
-      <option value="Any" selected>Any</option>
-      <option value="Morning">Morning</option>
-      <option value="Afternoon">Afternoon</option>
-      <option value="Night">Night</option>
-    </select>
-
     <div class="form-actions" style="margin-top:14px;">
       <button class="btn btn-primary" type="submit">Post job</button>
       <!-- updated: use client_dashboard (exists in app.py) to avoid BuildError -->

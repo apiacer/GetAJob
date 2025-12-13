@@ -62,6 +62,7 @@ build/
 # test file
 *test*
 
+<<<<<<< HEAD
 data.db
 *.db
 .venv/
@@ -71,3 +72,8 @@ __pycache__/
 
 .env
 config.py
+=======
+#env files
+.env
+*.env
+>>>>>>> 90737b767eb9686d54209d0d7708d7cda793d111

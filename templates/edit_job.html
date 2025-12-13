@@ -48,14 +48,6 @@
     <label style="margin-top:12px;">Tags (comma separated)</label>
     <input name="tags" class="input" type="text" value="{{ job.tags or '' }}">
 
-    <label style="margin-top:12px;">Availability</label>
-    <select name="availability" class="input" style="width:140px;">
-      <option value="Any" {% if job.availability == "Any" %}selected{% endif %}>Any</option>
-      <option value="Morning" {% if job.availability == "Morning" %}selected{% endif %}>Morning</option>
-      <option value="Afternoon" {% if job.availability == "Afternoon" %}selected{% endif %}>Afternoon</option>
-      <option value="Night" {% if job.availability == "Night" %}selected{% endif %}>Night</option>
-    </select>
-
     <div class="form-actions" style="margin-top:14px;">
       <button class="btn btn-primary" type="submit">Save changes</button>
       <a class="btn btn-outline" href="{{ url_for('job_detail', job_id=job.id) }}">Cancel</a>

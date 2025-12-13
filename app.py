@@ -292,6 +292,25 @@ def date_only(value):
     # Fallback: return first 10 characters (best-effort)
     return s[:10]
 
+@app.template_filter('datetime_format')
+def datetime_format(value):
+    """
+    Format datetime for display in conversation view.
+    """
+    if not value:
+        return ""
+    try:
+        # Try to parse the datetime
+        if isinstance(value, str):
+            dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        else:
+            dt = value
+        
+        # Format as: Jan 15, 2024 2:30 PM
+        return dt.strftime("%b %d, %Y %I:%M %p")
+    except Exception:
+        # Fallback to original value
+        return str(value)
 
 @app.context_processor
 def inject_current_year():
@@ -513,7 +532,6 @@ def admin_signup_secret():
         return redirect(url_for("admin_dashboard"))
     return render_template("admin_signup.html")
 
-
 @app.route("/signin", methods=["GET", "POST"])
 def signin():
     if current_user.is_authenticated:
@@ -611,6 +629,83 @@ def signin():
         return redirect(url_for("profile"))
 
     return render_template("signin.html")
+
+@app.route("/admin/conversation/view")
+@require_roles("admin")
+def admin_conversation_view():
+    """
+    Admin view to see a conversation between two users.
+    """
+    user_a_id = request.args.get('user_a_id')
+    user_b_id = request.args.get('user_b_id')
+    report_id = request.args.get('report_id')
+    
+    if not user_a_id or not user_b_id:
+        flash("Missing user IDs", "danger")
+        return redirect(url_for('admin_reports_page'))
+    
+    try:
+        user_a_id = int(user_a_id)
+        user_b_id = int(user_b_id)
+    except ValueError:
+        flash("Invalid user IDs", "danger")
+        return redirect(url_for('admin_reports_page'))
+    
+    # Get users
+    user_a = get_user_by_id(app.config["DATABASE"], user_a_id)
+    user_b = get_user_by_id(app.config["DATABASE"], user_b_id)
+    
+    # Get conversation messages
+    messages = get_conversation_rows(app.config["DATABASE"], user_a_id, user_b_id)
+    
+    # Get report info if report_id is provided
+    report_info = None
+    if report_id:
+        try:
+            report_info = get_report_by_id(app.config["DATABASE"], int(report_id))
+            if report_info:
+                # Add user objects to report info
+                report_info["reporter"] = get_user_by_id(app.config["DATABASE"], report_info["reporter_id"])
+        except Exception:
+            pass
+    
+    return render_template(
+        "conversation_view.html",
+        user_a=user_a,
+        user_b=user_b,
+        user_a_id=user_a_id,
+        user_b_id=user_b_id,
+        messages=messages,
+        report_info=report_info
+    )
+@app.route("/admin/conversation/delete", methods=["POST"])
+@require_roles("admin")
+def admin_delete_conversation():
+    """
+    Delete a conversation between two users.
+    """
+    user_a_id = request.form.get('user_a_id')
+    user_b_id = request.form.get('user_b_id')
+    
+    if not user_a_id or not user_b_id:
+        flash("Missing user IDs", "danger")
+        return redirect(url_for('admin_reports_page'))
+    
+    try:
+        conn = sqlite3.connect(app.config["DATABASE"])
+        conn.execute(
+            "DELETE FROM messages WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)",
+            (int(user_a_id), int(user_b_id), int(user_b_id), int(user_a_id))
+        )
+        conn.commit()
+        conn.close()
+        
+        flash("Conversation deleted successfully", "success")
+    except Exception as e:
+        app.logger.exception("Failed to delete conversation")
+        flash("Failed to delete conversation", "danger")
+    
+    return redirect(url_for('admin_reports_page'))
 
 @app.route("/rate/user/<int:user_id>", methods=["POST"])
 @login_required
@@ -755,6 +850,25 @@ def logout():
     logout_user()
     flash("Signed out.", "info")
     return redirect(url_for("index"))
+
+# Add this function to your app.py (somewhere near the other database functions)
+
+def update_report_status(db_path, report_id, status):
+    """
+    Update the status of a report.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "UPDATE message_reports SET status = ? WHERE id = ?",
+            (status, int(report_id))
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 # Add this download route to serve uploaded PDFs.
 from flask import send_from_directory, abort
@@ -1130,15 +1244,14 @@ def jobs_list():
     q = (request.args.get("q") or "").strip().lower()
     tags_q = (request.args.get("tags") or "").strip().lower()
     remote_only = request.args.get("remote", "").lower() in ("1", "true", "yes", "on")
-    per_page = max(min(int(request.args.get("per_page", 5)), 100), 1)
-    sort = (request.args.get("sort", "distance").strip())
-    availability = (request.args.get("availability"))
+    page = max(int(request.args.get("page", 1)), 1)
+    per_page = max(min(int(request.args.get("per_page", 20)), 100), 1)
+    sort = (request.args.get("sort") or "date").lower()
 
     lat = request.args.get("lat")
     lng = request.args.get("lng")
     center_lat = None
     center_lng = None
-
     try:
         if lat is not None and lng is not None and lat != "" and lng != "":
             center_lat = float(lat)
@@ -1174,13 +1287,6 @@ def jobs_list():
             if "remote" not in job_tags:
                 continue
 
-        if availability:
-            matching = availability == j.get("availability")
-            any = availability == "Any"
-            valid = matching or any
-            if not valid:
-                continue
-
         jlat = j.get("lat")
         jlng = j.get("lng")
         if center_lat is not None and jlat is not None and jlng is not None and jlat != "" and jlng != "":
@@ -1198,23 +1304,15 @@ def jobs_list():
 
         filtered.append(j)
 
-    print(" and the availability is ", availability, "and center_lat is ", center_lat)
-    print(lat)
-    if "distance" in sort:
+    if sort == "distance" and center_lat is not None:
         filtered.sort(key=lambda x: (x.get("_distance_miles") is None, x.get("_distance_miles") or 99999))
     else:
         filtered.sort(key=lambda x: x.get("created_at") or "", reverse=True)
 
     total = len(filtered)
-    total_pages = math.ceil(total / per_page)
-    page = max(min(int(request.args.get("page", 1)), total_pages), 1)
     start = (page - 1) * per_page
     end = start + per_page
     page_jobs = filtered[start:end]
-    if(page == total_pages):
-        viewed = (page - 1) * per_page + len(page_jobs)
-    else:
-        viewed = page * per_page
 
     query_args = dict(request.args)
     query_args.pop("page", None)
@@ -1223,17 +1321,14 @@ def jobs_list():
         "jobs_list.html",
         jobs=page_jobs,
         total=total,
-        total_pages=total_pages,
         page=page,
         per_page=per_page,
-        viewed=viewed,
         q=request.args.get("q", ""),
         tags=request.args.get("tags", ""),
         remote=remote_only,
         lat=center_lat,
         lng=center_lng,
         radius_miles=radius_miles,
-        availability=availability,
         sort=sort,
         query_args=query_args,
     )
@@ -1304,6 +1399,38 @@ US_STATES = {
     "south dakota":"SD","tennessee":"TN","texas":"TX","utah":"UT","vermont":"VT","virginia":"VA",
     "washington":"WA","west virginia":"WV","wisconsin":"WI","wyoming":"WY","district of columbia":"DC"
 }
+def create_simple_warning(db_path, user_id, message):
+    """
+    Create a simple warning for a user.
+    """
+    now = datetime.utcnow().isoformat()
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO user_warnings (user_id, message, created_at) VALUES (?, ?, ?)",
+            (int(user_id), message, now)
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+def get_user_warnings(db_path, user_id):
+    """
+    Get warnings for a user.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM user_warnings WHERE user_id = ?",
+            (int(user_id),)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 def _lookup_us_state_abbrev(name):
     if not name:
@@ -1402,7 +1529,6 @@ def api_jobs():
         app.logger.exception("API /api/jobs failed")
         return jsonify({"ok": False, "error": "Internal server error"}), 500
 
-
 @app.route("/api/jobs_nearby")
 @login_required
 def api_jobs_nearby():
@@ -1454,7 +1580,26 @@ def api_jobs_nearby():
 
 
 # --- Messaging & Reporting DB helpers ---
+def ensure_warnings_table():
+    """
+    Create simple warnings table.
+    """
+    sql = """
+    CREATE TABLE IF NOT EXISTS user_warnings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    """
+    conn = sqlite3.connect(app.config["DATABASE"])
+    try:
+        conn.execute(sql)
+        conn.commit()
+    finally:
+        conn.close()
 
+ensure_warnings_table()
 
 def ensure_messages_table():
     """
@@ -1500,6 +1645,55 @@ def ensure_reports_table():
     finally:
         conn.close()
 
+def create_warning(db_path, user_id, admin_id, warning_type, message):
+    """
+    Create a warning for a user.
+    """
+    now = datetime.utcnow().isoformat()
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO admin_warnings (user_id, admin_id, warning_type, message, is_dismissed, created_at) VALUES (?, ?, ?, ?, 0, ?)",
+            (int(user_id), int(admin_id), warning_type, message, now)
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+def get_user_unread_warnings(db_path, user_id):
+    """
+    Get unread warnings for a specific user.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM admin_warnings WHERE user_id = ? AND is_dismissed = 0 ORDER BY datetime(created_at) DESC",
+            (int(user_id),)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+def dismiss_warning(db_path, warning_id):
+    """
+    Mark a warning as dismissed.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "UPDATE admin_warnings SET is_dismissed = 1 WHERE id = ?",
+            (int(warning_id),)
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 def create_message(db_path, sender_id, recipient_id, body):
     now = datetime.utcnow().isoformat()
@@ -1785,11 +1979,20 @@ def api_users_lookup():
 @app.route("/admin/reports")
 @require_roles("admin")
 def admin_reports_page():
-    reports = get_reports(app.config["DATABASE"])
+    # Get filter from query parameters
+    status_filter = request.args.get('status')
+    
+    if status_filter:
+        reports = get_reports(app.config["DATABASE"], status=status_filter)
+    else:
+        reports = get_reports(app.config["DATABASE"])
+    
+    # Enrich reports with user information
     for r in reports:
         r["reporter"] = get_user_by_id(app.config["DATABASE"], r["reporter_id"])
         r["user_a_obj"] = get_user_by_id(app.config["DATABASE"], r["user_a"])
         r["user_b_obj"] = get_user_by_id(app.config["DATABASE"], r["user_b"])
+    
     return render_template("admin_reports.html", reports=reports)
 
 
@@ -1806,6 +2009,19 @@ def api_admin_reports():
         app.logger.exception("Failed to fetch admin reports")
         return jsonify({"ok": False, "error": "Internal server error"}), 500
 
+@app.route("/admin/send-warning", methods=["POST"])
+@require_roles("admin")
+def admin_send_warning():
+    user_id = request.form.get('user_id')
+    message = request.form.get('message', '⚠️ Warning: Your behavior has been flagged.')
+    
+    if not user_id:
+        flash("User ID required", "danger")
+        return redirect(request.referrer or url_for('admin_dashboard'))
+    
+    create_simple_warning(app.config["DATABASE"], user_id, message)
+    flash("Warning sent", "success")
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route("/api/admin/conversation")
 @require_roles("admin")
@@ -1841,7 +2057,6 @@ def post_job():
         location_text = request.form.get("location_text", "").strip() or None
         salary = request.form.get("salary", "").strip() or ""
         tags = request.form.get("tags", "").strip() or None
-        availability = request.form.get("availability", "").strip()
 
         lat_val = None
         lng_val = None
@@ -1864,7 +2079,7 @@ def post_job():
 
         if not title or not description:
             flash("Title and description are required.", "danger")
-            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field, availability=availability)
+            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field)
 
         employer_id = int(current_user.get_id())
         try:
@@ -1878,14 +2093,13 @@ def post_job():
                 lng=lng_val,
                 salary=salary,
                 tags=tags,
-                availability=availability,
             )
             flash("Job posted.", "success")
             return redirect(url_for("client_dashboard"))
         except Exception as e:
             app.logger.exception("Failed to create job: %s", e)
             flash("Unable to create job.", "danger")
-            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field, availability=availability)
+            return render_template("post_job.html", title=title, description=description, location_text=location_text, salary=salary, tags=tags, lat=lat_field, lng=lng_field)
 
     return render_template("post_job.html")
 
@@ -1934,7 +2148,6 @@ def edit_job(job_id):
         lng_val = None
         lat_field = request.form.get("lat")
         lng_field = request.form.get("lng")
-        availability = request.form.get("availability", "").strip()
         try:
             if lat_field:
                 lat_val = float(lat_field)
@@ -1951,7 +2164,6 @@ def edit_job(job_id):
         if not title or not description:
             flash("Title and description are required.", "danger")
             return render_template("edit_job.html", job=job)
-        print(request.form)
         try:
             updated = update_job(
                 app.config["DATABASE"],
@@ -1963,7 +2175,6 @@ def edit_job(job_id):
                 lng=lng_val,
                 salary=salary,
                 tags=tags,
-                availability=availability,
             )
             flash("Job updated.", "success")
             return redirect(url_for("job_detail", job_id=job_id))
@@ -1973,6 +2184,33 @@ def edit_job(job_id):
             return render_template("edit_job.html", job=job)
     return render_template("edit_job.html", job=job)
 
+@app.route("/warning/<int:warning_id>/dismiss", methods=["POST"])
+@login_required
+def dismiss_warning_route(warning_id):
+    """
+    Dismiss a warning.
+    """
+    try:
+        user_id = int(current_user.get_id())
+        
+        # Verify warning belongs to user
+        conn = sqlite3.connect(app.config["DATABASE"])
+        conn.row_factory = sqlite3.Row
+        warning = conn.execute(
+            "SELECT * FROM admin_warnings WHERE id = ? AND user_id = ?",
+            (warning_id, user_id)
+        ).fetchone()
+        conn.close()
+        
+        if warning:
+            dismiss_warning(app.config["DATABASE"], warning_id)
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Warning not found"}), 404
+            
+    except Exception as e:
+        app.logger.exception("Failed to dismiss warning")
+        return jsonify({"success": False, "error": "Server error"}), 500
 
 @app.route("/jobs/<int:job_id>/delete", methods=["POST"])
 @require_roles("client")
@@ -2052,6 +2290,24 @@ def submit_rating():
     else:
         return redirect(url_for("job_detail", job_id=target_id_i))
 
+@app.route("/api/check-warnings")
+@login_required
+def api_check_warnings():
+    """
+    Check if user has unread warnings.
+    """
+    try:
+        user_id = int(current_user.get_id())
+        warnings = get_user_unread_warnings(app.config["DATABASE"], user_id)
+        
+        return jsonify({
+            "has_warnings": len(warnings) > 0,
+            "warnings": warnings,
+            "count": len(warnings)
+        })
+    except Exception as e:
+        app.logger.exception("Failed to check warnings")
+        return jsonify({"has_warnings": False, "warnings": [], "count": 0})
 
 #
 # Admin dashboard and actions
@@ -2060,27 +2316,58 @@ def submit_rating():
 @require_roles("admin")
 def admin_dashboard():
     users = get_all_users(app.config["DATABASE"])
+    
+    # Fetch reports for the dashboard
+    reports = get_reports(app.config["DATABASE"], status="open")
+    
+    # Enrich reports with user information
+    for report in reports:
+        report["reporter"] = get_user_by_id(app.config["DATABASE"], report["reporter_id"])
+        report["user_a_obj"] = get_user_by_id(app.config["DATABASE"], report["user_a"])
+        report["user_b_obj"] = get_user_by_id(app.config["DATABASE"], report["user_b"])
+    
     tpl_path = os.path.join(BASE_DIR, "templates", "admin_dashboard.html")
     if os.path.exists(tpl_path):
-        return render_template("admin_dashboard.html", users=users)
+        return render_template("admin_dashboard.html", users=users, reports=reports)
+    
+    # Fallback template if admin_dashboard.html doesn't exist
     rows_html = ""
     for u in users:
         rows_html += "<li>{id}: {email} — role={role} — verified={verified}</li>".format(
             id=u.get("id"), email=u.get("email"), role=u.get("role"), verified=bool(u.get("verified"))
         )
+    
+    reports_html = ""
+    for r in reports:
+        reports_html += f"<li>Report #{r['id']}: {r.get('reason', 'No reason')} (Status: {r.get('status', 'open')})</li>"
+    
     html = f"""
     <html>
       <head><title>Admin dashboard</title></head>
       <body>
         <h2>Admin dashboard</h2>
-        <p>Users:</p>
+        
+        <h3>Reported Conversations</h3>
+        <ul>{reports_html}</ul>
+        
+        <h3>Users</h3>
         <ul>{rows_html}</ul>
+        
         <p><a href="{url_for('index')}">Home</a></p>
       </body>
     </html>
     """
     return render_template_string(html)
 
+@app.route("/admin/reports/<int:report_id>/resolve", methods=["POST"])
+@require_roles("admin")
+def admin_resolve_report(report_id):
+    success = update_report_status(app.config["DATABASE"], report_id, "resolved")
+    if success:
+        flash("Report marked as resolved.", "success")
+    else:
+        flash("Failed to update report status.", "danger")
+    return redirect(url_for("admin_dashboard"))
 
 @app.route("/admin/users/<int:user_id>/ban", methods=["POST"])
 @require_roles("admin")
@@ -2138,6 +2425,21 @@ def api_me():
     except Exception:
         return jsonify({"ok": False}), 500
 
+@app.route("/check-warnings")
+@login_required
+def check_warnings():
+    user_id = int(current_user.get_id())
+    warnings = get_user_warnings(app.config["DATABASE"], user_id)
+    
+    # Return and DELETE warnings (one-time display)
+    if warnings:
+        # Delete after showing
+        conn = sqlite3.connect(app.config["DATABASE"])
+        conn.execute("DELETE FROM user_warnings WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+    
+    return jsonify({"warnings": warnings})
 
 if __name__ == "__main__":
     # For local development only
