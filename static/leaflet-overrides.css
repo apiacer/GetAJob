@@ -1,17 +1,28 @@
-/* Prevent global img rules (eg. img { max-width:100% }) from breaking Leaflet tiles */
+/* leaflet-overrides.css */
+
 .leaflet-container img {
   max-width: none !important;
-  image-rendering: auto !important;
+  max-height: none !important;
 }
 
-/* Preserve tile sizing in case global CSS removes inline sizing */
 .leaflet-container .leaflet-tile {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  display: block !important;
+
   width: 256px !important;
   height: 256px !important;
 }
 
-/* Ensure the map container has a sensible default/min height */
-#map, .leaflet-container {
-  min-height: 420px;
-  box-sizing: content-box;
+.leaflet-container {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+/* Force the map container to be a real boy (tall) */
+#map.leaflet-container {
+  display: block !important;
+  height: 480px !important;     /* or 500px if you want taller */
+  min-height: 480px !important;
 }
