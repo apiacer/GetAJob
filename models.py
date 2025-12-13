@@ -140,9 +140,11 @@ def init_db(db_path):
         # applications: store uploaded file paths for cover letter and resume (pdfs)
         _add_column_if_missing(conn, "applications", "cover_letter_path TEXT")
         _add_column_if_missing(conn, "applications", "resume_path TEXT")
+        # jobs: add availability column if missing
+        _add_column_if_missing(conn, "jobs", "availability TEXT")
     except sqlite3.OperationalError as e:
         # Log but continue
-        print("models.init_db: failed to add application file columns:", e)
+        print("models.init_db: failed to add columns:", e)
 
     conn.close()
 
