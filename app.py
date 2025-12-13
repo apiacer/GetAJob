@@ -66,6 +66,7 @@ from models import (
     consume_token,
     purge_expired_tokens,
     get_token_info,
+    get_latest_token_for_email
 )
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -80,10 +81,10 @@ app.config["DATABASE"] = DB_PATH
 # Mail / Mailtrap config
 app.config["MAIL_SERVER"] = 'smtp.gmail.com'
 app.config["MAIL_PORT"] = 587
-app.config["MAIL_USERNAME"] = 'getajobnoreply@gmail.com'
+app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME")
 app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD")
 app.config["MAIL_USE_TLS"] = True
-app.config["MAIL_DEFAULT_SENDER"] = ("GetAJob", "getajobnoreply@gmail.com")
+app.config["MAIL_DEFAULT_SENDER"] = ("GetAJob", os.environ.get("MAIL_USERNAME"))
 
 mail = Mail(app)
 
@@ -453,17 +454,6 @@ def signup():
 
         flash("Signup successful. A verification email has been sent. Please verify your email before signing in.", "success")
         return redirect(url_for("signin"))
-    
-        """
-        # send verification email using DB-backed token
-        token = create_token(app.config["DATABASE"], email, purpose="verify", expires_seconds=app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600))
-        verify_url = url_for("verify_email", token=token, _external=True)
-        text = f"Hi {first_name or username},\n\nPlease verify your email by clicking the link below:\n\n{verify_url}\n\nIf you did not sign up, ignore this message.\n"
-        html = f"<p>Hi {first_name or username},</p><p>Please verify your email by clicking <a href='{verify_url}'>this link</a>.</p>"
-        send_email("Verify your Jobsite account", email, html_body=html, text_body=text)
-        flash("Signup successful. A verification email has been sent. Please verify your email before signing in.", "success")
-        return redirect(url_for("signin"))
-        """
 
     return render_template("signup.html")
 
@@ -564,9 +554,47 @@ def signin():
 
         # Check verified
         if not user_row.get("verified"):
-            flash("Please verify your email before signing in. Check your email for the verification link.", "warning")
-            return render_template("signin.html", email=email)
+            #check for existing unexpired token
+            info = get_latest_token_for_email(app.config["DATABASE"], email, purpose="verify")
 
+            if info:
+                #token exists and is valid
+                #compute remaining seconds
+                seconds_remaining = None
+                expires_at = info.get("expires_at")
+                if expires_at:
+                    try:
+                        exp_dt = datetime.fromisoformat(expires_at)
+                        delta = exp_dt - datetime.utcnow()
+                        seconds_remaining = max(0, int(delta.total_seconds()))
+                    except Exception:
+                        seconds_remaining = None
+                
+                flash("Your email is not verified. Please check your inbox.", "warning")
+                return render_template(
+                    "signin.html",
+                    email=email,
+                    verify_seconds_remaining=seconds_remaining,
+                )
+            
+            #no valid token, create a new one and send
+            ttl = app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600)
+
+            token = create_token(
+                app.config["DATABASE"],
+                email,
+                purpose="verify",
+                expires_seconds=ttl,
+            )
+
+            send_verification_email(user_row, token)
+
+            flash("Your previous verification link has expired. A new verification email has been sent. Please check your inbox.", "warning")
+            return render_template(
+                "signin.html", 
+                email=email
+            )
+        
         user_obj = User(
             id=user_row["id"],
             email=user_row["email"],
@@ -702,6 +730,14 @@ def reset_password(token):
         return redirect(url_for("forgot_password"))
 
     password = request.form.get("password", "")
+    confirm_password = request.form.get("confirm_password", "")
+
+    #make sure they match
+
+    if password != confirm_password:
+        flash("Passwords do not match.", "danger")
+        return render_template("reset_password.html", token=token)
+    
     ok, reason = validate_password(password)
     if not ok:
         flash(reason, "danger")
