@@ -60,4 +60,8 @@ build/
 .vscode/
 
 # test file
-*test*.env
+*test*
+
+#env files
+.env
+*.env
