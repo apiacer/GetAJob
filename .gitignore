@@ -65,9 +65,3 @@ build/
 #env files
 .env
 *.env
-
-venv/
-.venv/
-__pycache__/
-*.db
-*.sqlite3

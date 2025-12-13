@@ -9,10 +9,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 from flask import send_from_directory, abort
-from flask_mail import Mail, Message
-from flask import url_for
-from dotenv import load_dotenv
-load_dotenv()
+
 
 import requests
 from flask import (
@@ -66,7 +63,6 @@ from models import (
     consume_token,
     purge_expired_tokens,
     get_token_info,
-    get_latest_token_for_email
 )
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -77,16 +73,6 @@ app.config["SECRET_KEY"] = os.environ.get(
     "FLASK_SECRET_KEY", "change-me-to-a-random-secret"
 )
 app.config["DATABASE"] = DB_PATH
-
-# Mail / Mailtrap config
-app.config["MAIL_SERVER"] = 'smtp.gmail.com'
-app.config["MAIL_PORT"] = 587
-app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME")
-app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD")
-app.config["MAIL_USE_TLS"] = True
-app.config["MAIL_DEFAULT_SENDER"] = ("GetAJob", os.environ.get("MAIL_USERNAME"))
-
-mail = Mail(app)
 
 # Email / token configuration
 app.config["EMAIL_MODE"] = os.environ.get("EMAIL_MODE", "console")  # 'console' or 'smtp'
@@ -196,53 +182,45 @@ def require_roles(*roles):
 
     return decorator
 
-#  email sending helper 
-def send_verification_email(user, token):
-    user_email = user["email"]
-    
-    #get user name, if not use something else
-    if user.get("first_name"):
-        user_name = user["first_name"]
-    elif user.get("username"):
-        user_name = user["username"]
-    else:
-        user_name = "there"
 
-    verify_url = url_for("verify_email", token=token, _external=True)
-
-    subject = "Verify your GetAJob account"
-    body = f"""Hi {user_name},
-
-    Welcome to GetAJob! This is totally not a scam! Please verify your email address by clicking the link below:
-
-    {verify_url}
-
-    If you did not sign up for a GetAJob account, please ignore this email.
-    """
-    msg = Message(subject=subject, recipients=[user_email])
-    msg.body = body
-    msg.html = f"""<p>Hi <strong>{user_name}</strong>,</p>
-    <p>Welcome to GetAJob! This is totally not a scam! Please verify your email address by clicking the link below:</p>
-    <p><a href="{verify_url}">Verify Email</a></p>
-    <p>If you did not sign up for a GetAJob account, please ignore this email.</p>
-    """
-    mail.send(msg)
-
+# --- email helper (console or SMTP) ---
 def send_email(subject, recipient, html_body=None, text_body=None):
-    msg = Message(subject=subject, recipients=[recipient])
-
-    #plain text part
-    if text_body:
-        msg.body = text_body
+    mode = app.config.get("EMAIL_MODE", "console")
+    if mode == "smtp" and app.config.get("MAIL_HOST"):
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = app.config.get("MAIL_FROM")
+        msg["To"] = recipient
+        if html_body:
+            msg.add_alternative(html_body, subtype="html")
+            if text_body:
+                msg.set_content(text_body)
+        else:
+            msg.set_content(text_body or subject)
+        try:
+            server = smtplib.SMTP(app.config.get("MAIL_HOST"), app.config.get("MAIL_PORT"))
+            server.starttls()
+            if app.config.get("MAIL_USER"):
+                server.login(app.config.get("MAIL_USER"), app.config.get("MAIL_PASS"))
+            server.send_message(msg)
+            server.quit()
+            app.logger.info("Sent email to %s via SMTP", recipient)
+            return True
+        except Exception as e:
+            app.logger.exception("Failed to send email via SMTP: %s", e)
+            return False
     else:
-        msg.body = subject #fallback
-    
-    #html part
-    if html_body:
-        msg.html = html_body
-
-    mail.send(msg)
-    return True
+        # console mode: print link/information to server console (development)
+        app.logger.info("EMAIL (console mode) -> To: %s Subject: %s\n\n%s\n\n%s", recipient, subject, text_body or "", html_body or "")
+        print("\n--- EMAIL (console mode) ---")
+        print("To:", recipient)
+        print("Subject:", subject)
+        if text_body:
+            print(text_body)
+        if html_body:
+            print(html_body)
+        print("--- END EMAIL ---\n")
+        return True
 
 
 # ---- password validator helper ----
@@ -460,20 +438,15 @@ def signup():
         except sqlite3.IntegrityError:
             flash("An account with that email or username already exists.", "warning")
             return render_template("signup.html", email=email, role=role, username=username, first_name=first_name, last_name=last_name)
-        
-        #new email verification flow
-        token = create_token(
-            app.config["DATABASE"],
-            email,
-            purpose="verify",
-            expires_seconds=app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600),
-        )
-        #use Flask-Mail helper
-        send_verification_email(user, token)
 
+        # send verification email using DB-backed token
+        token = create_token(app.config["DATABASE"], email, purpose="verify", expires_seconds=app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600))
+        verify_url = url_for("verify_email", token=token, _external=True)
+        text = f"Hi {first_name or username},\n\nPlease verify your email by clicking the link below:\n\n{verify_url}\n\nIf you did not sign up, ignore this message.\n"
+        html = f"<p>Hi {first_name or username},</p><p>Please verify your email by clicking <a href='{verify_url}'>this link</a>.</p>"
+        send_email("Verify your Jobsite account", email, html_body=html, text_body=text)
         flash("Signup successful. A verification email has been sent. Please verify your email before signing in.", "success")
-        return redirect(url_for("signin", email=email, from_signup=1))
-
+        return redirect(url_for("signin"))
 
     return render_template("signup.html")
 
@@ -538,37 +511,6 @@ def signin():
     if current_user.is_authenticated:
         return redirect(url_for("profile"))
 
-    #Handle GET: show signin form, maybe with countdown
-    if request.method == "GET":
-        email = request.args.get("email", "").strip().lower()
-        from_signup = request.args.get("from_signup")
-        verify_seconds_remaining = None
-
-        if email and from_signup:
-            # only if we came from signup with an email
-            user_row = get_user_by_email(app.config["DATABASE"], email)
-            if user_row and not user_row.get("verified"):
-                info = get_latest_token_for_email(
-                    app.config["DATABASE"], email, purpose="verify"
-                )
-                if info:
-                    expires_at = info.get("expires_at")
-                    if expires_at:
-                        try:
-                            exp_dt = datetime.fromisoformat(expires_at)
-                            delta = exp_dt - datetime.utcnow()
-                            verify_seconds_remaining = max(
-                                0, int(delta.total_seconds())
-                            )
-                        except Exception:
-                            verify_seconds_remaining = None
-
-        return render_template(
-            "signin.html",
-            email=email,
-            verify_seconds_remaining=verify_seconds_remaining,
-        )
-
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -604,44 +546,13 @@ def signin():
 
         # Check verified
         if not user_row.get("verified"):
-            info = get_latest_token_for_email(app.config["DATABASE"], email, purpose="verify")
-
-            if info:
-                seconds_remaining = None
-                expires_at = info.get("expires_at")
-                if expires_at:
-                    try:
-                        exp_dt = datetime.fromisoformat(expires_at)
-                        delta = exp_dt - datetime.utcnow()
-                        seconds_remaining = max(0, int(delta.total_seconds()))
-                    except Exception:
-                        seconds_remaining = None
-
-                flash("Your email is not verified. Please check your inbox.", "warning")
-                return render_template(
-                    "signin.html",
-                    email=email,
-                    verify_seconds_remaining=seconds_remaining,
-                )
-
-            # no valid token, create a new one and send
-            token = create_token(
-                app.config["DATABASE"],
-                email,
-                purpose="verify",
-                expires_seconds=app.config.get("EMAIL_VERIFY_EXPIRATION", 72 * 3600),
-            )
-
-            send_verification_email(user_row, token)
-
-            flash("Your previous verification link has expired. A new verification email has been sent. Please check your inbox.", "warning")
+            flash("Please verify your email before signing in. Check your email for the verification link.", "warning")
             return render_template("signin.html", email=email)
 
-        # Verified: log them in
         user_obj = User(
             id=user_row["id"],
             email=user_row["email"],
-            role=user_row.get("role", "contractor"),
+            role=user_row.get("role", "contractor"),  # default contractor
             is_banned=user_row.get("is_banned", 0),
             banned_until=user_row.get("banned_until"),
             username=user_row.get("username"),
@@ -653,6 +564,7 @@ def signin():
         flash("Signed in successfully.", "success")
         return redirect(url_for("profile"))
 
+    return render_template("signin.html")
 
 @app.route("/admin/conversation/view")
 @require_roles("admin")
@@ -849,14 +761,6 @@ def reset_password(token):
         return redirect(url_for("forgot_password"))
 
     password = request.form.get("password", "")
-    confirm_password = request.form.get("confirm_password", "")
-
-    #make sure they match
-
-    if password != confirm_password:
-        flash("Passwords do not match.", "danger")
-        return render_template("reset_password.html", token=token)
-    
     ok, reason = validate_password(password)
     if not ok:
         flash(reason, "danger")
